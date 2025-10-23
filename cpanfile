@@ -12,6 +12,7 @@ recommends 'Test2::Harness::Util::HashBase';
 # Development dependencies
 on 'test' => sub {
     requires 'Test2::V0';
+    requires 'Capture::Tiny';
 };
 
 on 'develop' => sub {

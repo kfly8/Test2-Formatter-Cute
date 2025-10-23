@@ -31,3 +31,4 @@ MYMETA.*
 /Test2-Formatter-Cute-*
 
 cpanfile.snapshot
+tmp/
