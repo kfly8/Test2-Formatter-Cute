@@ -31,7 +31,6 @@ sub run_test_with_formatter {
     $opts //= {};
 
     local $ENV{T2_FORMATTER} = 'Cute';
-    local $ENV{CURE_COLOR} = 0;  # 色を無効化してテストしやすくする
 
     my $file = File::Spec->catfile(split m!/!, $test_file);
 

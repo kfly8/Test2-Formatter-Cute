@@ -4,13 +4,13 @@ use Test2::Plugin::UTF8;
 use lib 't/lib';
 use TestHelper;
 
-my $result = run_test_with_formatter('t/examples/basic.t');
+my $result = run_test_with_formatter('t/examples/basic.pl');
 my $stdout = $result->{stdout};
 
 subtest 'file header with checkmark and path' => sub {
     # spec: ✓ ./t/test.t [1.10ms]
-    like($stdout, qr/✓ t[\/\\]examples[\/\\]basic\.t/, 'has file header with checkmark');
-    like($stdout, qr/✓ .*basic\.t \[\d+\.\d+m?s\]/, 'has time display');
+    like($stdout, qr/✓ t[\/\\]examples[\/\\]basic.pl/, 'has file header with checkmark');
+    like($stdout, qr/✓ .*basic.pl \[\d+\.\d+m?s\]/, 'has time display');
 };
 
 subtest 'subtest hierarchy' => sub {

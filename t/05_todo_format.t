@@ -3,11 +3,11 @@ use Test2::V0;
 use lib 't/lib';
 use TestHelper;
 
-my $result = run_test_with_formatter('t/examples/todo.t');
+my $result = run_test_with_formatter('t/examples/todo.pl');
 my $stdout = $result->{stdout};
 
 subtest 'file and subtest show success despite TODO failures' => sub {
-    like($stdout, qr/^✓ t[\/\\]examples[\/\\]todo\.t/m, 'file header shows checkmark');
+    like($stdout, qr/^✓ t[\/\\]examples[\/\\]todo.pl/m, 'file header shows checkmark');
     like($stdout, qr/^\s{2}✓ todo/m, 'subtest shows checkmark despite TODO failures');
 };
 
@@ -29,11 +29,11 @@ subtest 'exit code shows success' => sub {
 };
 
 subtest 'TODO failure details are displayed' => sub {
-    like($stdout, qr/\sFAIL\s+t\/examples\/todo\.t > todo > 1 \+ 1 should equal 3/, 'shows FAIL path for TODO failure');
+    like($stdout, qr/\sFAIL\s+t\/examples\/todo.pl > todo > 1 \+ 1 should equal 3/, 'shows FAIL path for TODO failure');
     like($stdout, qr/Received.*eq.*Expected/s, 'shows Received eq Expected for TODO failure');
     like($stdout, qr/Expected:\s*3/, 'shows expected value 3 for TODO failure');
     like($stdout, qr/Received:\s*2/, 'shows received value 2 for TODO failure');
-    like($stdout, qr/❯ .*todo\.t:\d+/, 'shows file and line number for TODO failure');
+    like($stdout, qr/❯ .*todo.pl:\d+/, 'shows file and line number for TODO failure');
 };
 
 done_testing;

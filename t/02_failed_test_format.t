@@ -3,12 +3,12 @@ use Test2::V0;
 use lib 't/lib';
 use TestHelper;
 
-my $result = run_test_with_formatter('t/examples/failed.t', { allow_fail => 1 });
+my $result = run_test_with_formatter('t/examples/failed.pl', { allow_fail => 1 });
 my $stdout = $result->{stdout};
 
 subtest 'file header shows failure' => sub {
     # spec: ✘ ./t/failed-test.t [1.10ms]
-    like($stdout, qr/✘ t[\/\\]examples[\/\\]failed\.t/, 'file header shows X mark for failure');
+    like($stdout, qr/✘ t[\/\\]examples[\/\\]failed.pl/, 'file header shows X mark for failure');
 };
 
 subtest 'subtest and test case status' => sub {
@@ -31,8 +31,8 @@ subtest 'failure details - no separator lines' => sub {
 
 subtest 'failure details - test path' => sub {
     # spec: FAIL  t/failed-test.t > foo > case2 (no ./ prefix, extra space after FAIL)
-    like($stdout, qr/\sFAIL\s+t\/examples\/failed\.t > foo > case2/, 'shows failure path for case2');
-    like($stdout, qr/\sFAIL\s+t\/examples\/failed\.t > foo > case3/, 'shows failure path for case3');
+    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo > case2/, 'shows failure path for case2');
+    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo > case3/, 'shows failure path for case3');
 };
 
 subtest 'failure details - comparison format' => sub {
@@ -51,7 +51,7 @@ subtest 'failure details - source code context' => sub {
     #       5 | subtest 'foo' => sub {
     #       6 |   is 1+1, 2, 'case1';
     #       7 |   is 1-1, 1, 'case2'; (該当行を太字にする)
-    like($stdout, qr/❯ .*failed\.t:\d+/, 'shows file and line number');
+    like($stdout, qr/❯ .*failed.pl:\d+/, 'shows file and line number');
     like($stdout, qr/is 1-1, 1, 'case2'/, 'shows source code for case2');
     # case3 is split across multiple lines, so check both parts
     like($stdout, qr/is 0-1,/, 'shows source code for case3 (line 1)');

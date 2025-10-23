@@ -26,10 +26,17 @@ sub init {
     my $self = shift;
     $self->{+HANDLES} ||= $self->_open_handles;
 
-    # Check if color is enabled via environment or parameter
+    # Check if color is enabled
     if (!defined $self->{+COLOR}) {
-        # Check environment variables
-        $self->{+COLOR} = $ENV{CURE_COLOR} || $ENV{HARNESS_IS_VERBOSE} || (-t STDOUT ? 1 : 0);
+        # Check T2_FORMATTER_CUTE_COLOR environment variable first (for testing)
+        if (defined $ENV{T2_FORMATTER_CUTE_COLOR}) {
+            $self->{+COLOR} = $ENV{T2_FORMATTER_CUTE_COLOR} ? 1 : 0;
+        }
+        else {
+            # Check if output handle is a terminal
+            my $out = $self->{+HANDLES}->[OUT_STD];
+            $self->{+COLOR} = (-t $out) ? 1 : 0;
+        }
     }
 
     # Initialize counters and state
