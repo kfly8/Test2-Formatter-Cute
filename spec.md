@@ -61,6 +61,7 @@ Files=1, Tests=7, Duration=1.10ms, StartAt=2025-09-08T17:26:43, Seed=20251023164
   - ` FAIL ` は赤背景（前後スペース含む、文字色は黒、太字）
   - `Tests failed.` は赤文字
   - サマリー行に `Pass=N, Fail=M` を追加
+- TODOテストがある場合：サマリー行に `Todo=N` を追加
 - [0.73ms] のようにテストの実行時間を表示する
   - 表示対象は、テストファイル、subtest
   - 灰色文字表示
@@ -192,8 +193,8 @@ TODOテスト（`todo` ブロック内のテスト）は、将来的に修正予
 
 
  PASS  All tests successful.
-Files=1, Tests=1, Duration=1.10ms, StartAt=2025-09-08T17:26:43, Seed=20251023164910123
+Files=1, Tests=1, Todo=2, Duration=1.10ms, StartAt=2025-09-08T17:26:43, Seed=20251023164910123
 ```
 
-注: テスト総数は1（`pass case`のみ）。TODOテスト2つは除外される。TODOの失敗詳細は表示されるが、FAIL カウントには含まれない。
+注: テスト総数は1（`pass case`のみ）。TODOテスト2つは除外され、`Todo=2`として表示される。TODOの失敗詳細は表示されるが、FAIL カウントには含まれない。
 

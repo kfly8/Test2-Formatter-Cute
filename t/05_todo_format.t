@@ -21,6 +21,7 @@ subtest 'TODO tests excluded from counts' => sub {
     like($stdout, qr/^Files=1, Tests=1/m, 'shows Tests=1 (TODO tests excluded)');
     unlike($stdout, qr/Pass=/, 'no Pass count when all pass');
     unlike($stdout, qr/Fail=/, 'no Fail count when all pass');
+    like($stdout, qr/Todo=2/m, 'shows Todo=2 for TODO tests');
 };
 
 subtest 'exit code shows success' => sub {

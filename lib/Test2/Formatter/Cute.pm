@@ -7,7 +7,7 @@ use Test2::Util qw(clone_io);
 use Test2::Util::HashBase qw(
     handles _encoding color
     _file_printed _test_file
-    _pass_count _fail_count _total_count
+    _pass_count _fail_count _total_count _todo_count
     _output_buffer
     _start_time _start_at
     _failures
@@ -38,6 +38,7 @@ sub init {
     $self->{+_PASS_COUNT} = 0;
     $self->{+_FAIL_COUNT} = 0;
     $self->{+_TOTAL_COUNT} = 0;
+    $self->{+_TODO_COUNT} = 0;
     $self->{+_OUTPUT_BUFFER} = '';
     $self->{+_START_TIME} = undef;
     $self->{+_START_AT} = undef;
@@ -195,13 +196,17 @@ sub write {
                 }
             }
 
-            # Count top-level subtest only if it contains nested subtests and not TODO
-            if ($nesting == 0 && $has_nested_subtests && !$is_todo) {
-                $self->{+_TOTAL_COUNT}++;
-                if ($pass) {
-                    $self->{+_PASS_COUNT}++;
+            # Count top-level subtest only if it contains nested subtests
+            if ($nesting == 0 && $has_nested_subtests) {
+                if ($is_todo) {
+                    $self->{+_TODO_COUNT}++;
                 } else {
-                    $self->{+_FAIL_COUNT}++;
+                    $self->{+_TOTAL_COUNT}++;
+                    if ($pass) {
+                        $self->{+_PASS_COUNT}++;
+                    } else {
+                        $self->{+_FAIL_COUNT}++;
+                    }
                 }
             }
 
@@ -286,8 +291,10 @@ sub _write_children {
             my $color = $is_todo ? 'gray' : ($pass ? 'green' : 'red');
             $emoji = $self->_colorize($emoji, $color);
 
-            # Count this assertion (skip TODO tests)
-            if (!$is_todo) {
+            # Count this assertion
+            if ($is_todo) {
+                $self->{+_TODO_COUNT}++;
+            } else {
                 $self->{+_TOTAL_COUNT}++;
                 if ($pass) {
                     $self->{+_PASS_COUNT}++;
@@ -529,6 +536,11 @@ sub finalize {
     # Add Pass/Fail counts if there are failures
     if ($self->{+_FAIL_COUNT} > 0) {
         $summary .= ", Pass=$self->{+_PASS_COUNT}, Fail=$self->{+_FAIL_COUNT}";
+    }
+
+    # Add Todo count if there are TODO tests
+    if ($self->{+_TODO_COUNT} > 0) {
+        $summary .= ", Todo=$self->{+_TODO_COUNT}";
     }
 
     # Add Duration
