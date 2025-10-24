@@ -3,12 +3,14 @@ use warnings;
 use utf8;
 use Test2::V0;
 
+use lib 't/lib';
+use TestHelper;
+
 # Test UTF-8 characters in source code context display
 # This test verifies that when displaying source code context for failures,
 # UTF-8 characters (like emoji) are displayed correctly and not garbled.
 
 subtest 'UTF-8 source code display' => sub {
-    # Run a test file with UTF-8 characters and capture output
     my $test_file = 't/examples/failed.pl';
 
     skip_all "Test file $test_file not found" unless -f $test_file;
@@ -22,9 +24,8 @@ subtest 'UTF-8 source code display' => sub {
     like($content, qr/☺️/, 'Test file contains UTF-8 emoji');
 
     # Run the test with Cute formatter and capture output
-    my $cmd = "PERL5OPT='-MCarmel::Setup' PERL_CARMEL_PATH='/Users/kfly8/src/github.com/kfly8/Test2-Formatter-Cute' T2_FORMATTER=Cute perl -Ilib $test_file 2>&1";
-    my $output = `$cmd`;
-    utf8::decode($output);  # Decode UTF-8 bytes to Perl string
+    my $result = run_test_with_formatter($test_file, { allow_fail => 1 });
+    my $output = $result->{stdout};
 
     # Verify UTF-8 characters are displayed correctly in output
     like($output, qr/foo☺️/, 'UTF-8 emoji displayed correctly in source context');
