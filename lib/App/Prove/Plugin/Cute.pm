@@ -2,35 +2,6 @@ package App::Prove::Plugin::Cute;
 use strict;
 use warnings;
 
-=head1 NAME
-
-App::Prove::Plugin::Cute - Prove plugin to enable Test2::Formatter::Cute
-
-=head1 SYNOPSIS
-
-  # Use with prove
-  prove -PCute -l t/
-
-  # Run multiple tests
-  prove -PCute -l t/*.t
-
-  # Enable debug mode
-  T2_FORMATTER_CUTE_DEBUG=1 prove -PCute -l t/
-
-=head1 DESCRIPTION
-
-This plugin enables Test2::Formatter::Cute to work with the prove command by:
-
-1. Setting T2_FORMATTER=Cute environment variable
-2. Monkey-patching App::Prove::_runtests to bypass TAP::Harness
-3. Running tests directly with Test2::Formatter::Cute
-4. Providing a test summary
-
-This approach completely bypasses TAP parsing, allowing the cute emoji format
-to be displayed properly.
-
-=cut
-
 sub load {
     my ($class, $p) = @_;
     my @args = @{ $p->{args} };
@@ -80,11 +51,6 @@ sub load {
             # Run each test directly
             for my $test (@tests) {
                 my @cmd = ($^X, @switches, @lib_args, $test);
-
-                # Show command in debug mode
-                if ($ENV{T2_FORMATTER_CUTE_DEBUG}) {
-                    print "# Running: @cmd\n\n";
-                }
 
                 # Capture output for parsing
                 open my $fh, '-|', @cmd or die "Cannot run test: $!";
@@ -292,40 +258,47 @@ sub _print_final_summary {
 
 __END__
 
-=head1 HOW IT WORKS
+=encoding utf8
 
-This plugin uses monkey-patching to override App::Prove::_runtests:
+=head1 NAME
 
-1. Sets T2_FORMATTER=Cute environment variable
-2. Overrides App::Prove::_runtests method
-3. Bypasses TAP::Harness completely
-4. Runs each test file directly: perl -I lib t/test.t
-5. Collects exit codes and displays a summary
+App::Prove::Plugin::Cute - Makes your test output cute and easy
 
-=head1 ALTERNATIVES
+=head1 SYNOPSIS
 
-If you prefer a more official approach, consider using Test2::Harness:
+  prove -PCute -lvr t/
 
-  # Install yath
-  cpanm Test2::Harness
+=head1 DESCRIPTION
 
-  # Run tests with yath (native Test2::Formatter support)
-  yath test t/
+App::Prove::Plugin::Cute makes your Perl test output visually clearer and easier.
+The following is an example output:
 
-Or run tests directly:
+  ✘ t/examples/failed.pl [0.75ms]
+    ✘ foo [0.52ms]
+      ✓ case1
+      ✘ case2
+      ✘ case3
 
-  T2_FORMATTER=Cute perl -Ilib t/test.t
+   FAIL t/examples/failed.pl > foo > case2
 
-=head1 ENVIRONMENT VARIABLES
+    Received eq Expected
 
-=over 4
+    Expected: 1
+    Received: 0
 
-=item * C<T2_FORMATTER_CUTE_DEBUG>
+    ❯ t/examples/failed.pl:5
+      1 | use Test2::V0;
+      2 |
+      3 | subtest 'foo' => sub {
+      4 |     is 1+1, 2, 'case1';
+    ✘ 5 |     is 1-1, 1, 'case2';
 
-When set to 1, displays the exact command being run for each test.
+  FAIL Tests failed.
+  Files=1, Tests=3, Pass=1, Fail=2, Duration=0.71ms, Seed=20251024
+  Failed files:
+    t/examples/failed.pl
 
-  T2_FORMATTER_CUTE_DEBUG=1 prove -PCuteFormatter -l t/
+=head1 SEE ALSO
 
-=back
+L<Test2::Formatter::Cute>
 
-=cut
