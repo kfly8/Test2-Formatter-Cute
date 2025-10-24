@@ -96,7 +96,7 @@ sub _format_duration {
     $with_brackets = 1 unless defined $with_brackets;
     # Default to gray color for backward compatibility
     $with_color = 1 unless defined $with_color;
-    
+
     my $text = $with_brackets ? "[$formatted]" : $formatted;
     return ($self->{+COLOR} && $with_color) ? $self->_colorize($text, 'gray') : $text;
 }
@@ -184,12 +184,6 @@ sub write {
 
         # For top-level events (nesting=0), add 1 to indent under file header
         my $indent_level = $nesting + 1;
-        my $indent = '  ' x $indent_level;
-
-        # Choose emoji based on pass/fail
-        my $emoji = $pass ? "\x{2713}" : "\x{2718}";  # ✓ or ✘
-        my $color = $is_todo ? 'gray' : ($pass ? 'green' : 'red');
-        $emoji = $self->_colorize($emoji, $color);
 
         # If this is a subtest with children, output all children recursively
         if ($f->{parent} && $f->{parent}{children}) {
@@ -225,8 +219,15 @@ sub write {
                     $f->{parent}{stop_stamp}
                 );
             }
-            my $todo_suffix = $is_todo ? " # TODO $todo_reason" : '';
-            $self->{+_OUTPUT_BUFFER} .= "$indent$emoji $name$time_str$todo_suffix\n";
+
+            $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+                pass => $pass,
+                name => $name,
+                indent_level => $indent_level,
+                is_todo => $is_todo,
+                todo_reason => $todo_reason,
+                time_str => $time_str,
+            );
 
             # Push subtest name to stack for tracking path
             push @{$self->{+_SUBTEST_STACK}}, $name;
@@ -248,8 +249,14 @@ sub write {
             if (!$pass) {
                 $self->_record_failure($f, $name);
             }
-            my $todo_suffix = $is_todo ? " # TODO $todo_reason" : '';
-            $self->{+_OUTPUT_BUFFER} .= "$indent$emoji $name$todo_suffix\n";
+
+            $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+                pass => $pass,
+                name => $name,
+                indent_level => $indent_level,
+                is_todo => $is_todo,
+                todo_reason => $todo_reason,
+            );
         }
     }
 
@@ -267,8 +274,6 @@ sub write {
 
 sub _write_children {
     my ($self, $children, $indent_level) = @_;
-
-    my $indent = '  ' x $indent_level;
 
     for my $child (@$children) {
         # Skip plan events
@@ -294,10 +299,6 @@ sub _write_children {
                 }
             }
 
-            my $emoji = $pass ? "\x{2713}" : "\x{2718}";  # ✓ or ✘
-            my $color = $is_todo ? 'gray' : ($pass ? 'green' : 'red');
-            $emoji = $self->_colorize($emoji, $color);
-
             # Count this assertion
             if ($is_todo) {
                 $self->{+_TODO_COUNT}++;
@@ -320,8 +321,15 @@ sub _write_children {
                         $child->{parent}{stop_stamp}
                     );
                 }
-                my $todo_suffix = $is_todo ? " # TODO $todo_reason" : '';
-                $self->{+_OUTPUT_BUFFER} .= "$indent$emoji $name$time_str$todo_suffix\n";
+
+                $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+                    pass => $pass,
+                    name => $name,
+                    indent_level => $indent_level,
+                    is_todo => $is_todo,
+                    todo_reason => $todo_reason,
+                    time_str => $time_str,
+                );
 
                 # Push subtest name to stack
                 push @{$self->{+_SUBTEST_STACK}}, $name;
@@ -330,8 +338,13 @@ sub _write_children {
             }
             else {
                 # Regular test (no time display for individual assertions)
-                my $todo_suffix = $is_todo ? " # TODO $todo_reason" : '';
-                $self->{+_OUTPUT_BUFFER} .= "$indent$emoji $name$todo_suffix\n";
+                $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+                    pass => $pass,
+                    name => $name,
+                    indent_level => $indent_level,
+                    is_todo => $is_todo,
+                    todo_reason => $todo_reason,
+                );
 
                 # Record failure for individual test (including TODO failures)
                 if (!$pass) {
@@ -342,6 +355,7 @@ sub _write_children {
 
         # Handle errors in children
         if ($child->{errors}) {
+            my $indent = '  ' x $indent_level;
             for my $error (@{$child->{errors}}) {
                 my $error_emoji = $self->_colorize("\x{2718}", 'red');
                 $self->{+_OUTPUT_BUFFER} .= "$indent$error_emoji Error: $error->{details}\n";
@@ -368,6 +382,278 @@ sub _record_failure {
     push @{$self->{+_FAILURES}}, $failure_info;
 }
 
+# Rendering methods - all use named arguments and explicit dependencies
+
+# Render a single test line (assertion or subtest)
+# Input:
+#   pass: boolean - whether the test passed
+#   name: string - test name/description
+#   indent_level: number - indentation level (0 for top-level)
+#   is_todo: boolean - whether this is a TODO test (optional, default: 0)
+#   todo_reason: string - TODO reason (optional, default: '')
+#   time_str: string - formatted time string (optional, default: '')
+# Output: string - formatted test line with emoji, indentation, and optional TODO/time
+#   Example: "  ✓ test name [12.34ms]\n"
+#   Example: "    ✘ failed test # TODO not implemented yet\n"
+sub _render_test_line {
+    my ($self, %args) = @_;
+    my $pass = $args{pass};
+    my $name = $args{name};
+    my $indent_level = $args{indent_level};
+    my $is_todo = $args{is_todo} // 0;
+    my $todo_reason = $args{todo_reason} // '';
+    my $time_str = $args{time_str} // '';
+
+    my $indent = '  ' x $indent_level;
+    my $emoji = $pass ? "\x{2713}" : "\x{2718}";  # ✓ or ✘
+    my $color = $is_todo ? 'gray' : ($pass ? 'green' : 'red');
+    $emoji = $self->_colorize($emoji, $color);
+
+    my $todo_suffix = $is_todo ? " # TODO $todo_reason" : '';
+    return "$indent$emoji $name$time_str$todo_suffix\n";
+}
+
+# Render the file header line
+# Input:
+#   file: string - test file path
+#   total_time_str: string - formatted total time (optional, default: '')
+#   fail_count: number - number of failed tests
+# Output: string - file header with pass/fail emoji and time
+#   Example: "✓ t/basic.t [123.45ms]\n"
+#   Example: "✘ t/failed.t [1.23s]\n"
+sub _render_file_header {
+    my ($self, %args) = @_;
+    my $file = $args{file};
+    my $total_time_str = $args{total_time_str} // '';
+    my $fail_count = $args{fail_count};
+
+    my $has_failures = $fail_count > 0;
+    my $emoji = $has_failures ? "\x{2718}" : "\x{2713}";
+    my $color = $has_failures ? 'red' : 'green';
+    $emoji = $self->_colorize($emoji, $color);
+
+    return "$emoji $file$total_time_str\n";
+}
+
+# Render the failure header showing the path to the failed test
+# Input:
+#   file_path: string - test file path
+#   path_parts: arrayref - path elements from file to test (e.g., ["subtest", "nested", "test"])
+# Output: string - failure header with FAIL label and path
+#   Example: " FAIL  t/test.t > subtest > test name\n"
+sub _render_failure_header {
+    my ($self, %args) = @_;
+    my $file_path = $args{file_path};
+    my $path_parts = $args{path_parts};  # arrayref
+
+    my $fail_label = " FAIL ";
+    $fail_label = $self->_colorize($fail_label, 'red_bg') if $self->{+COLOR};
+
+    my $separator = '>';
+    $separator = $self->_colorize($separator, 'gray') if $self->{+COLOR};
+
+    my $path_str = join(" $separator ", @$path_parts);
+    return "$fail_label $file_path $separator $path_str\n";
+}
+
+# Render the comparison between expected and received values
+# Input:
+#   received: string - actual value received (optional, default: '')
+#   op: string - comparison operator (e.g., 'eq', '==') (optional, default: '')
+#   expected: string - expected value (optional, default: '')
+# Output: string - formatted comparison display
+#   Example:
+#     "\n"
+#     "  Received eq Expected\n"
+#     "\n"
+#     "  Expected: foo\n"
+#     "  Received: bar\n"
+sub _render_failure_comparison {
+    my ($self, %args) = @_;
+    my $received = $args{received} // '';
+    my $op = $args{op} // '';
+    my $expected = $args{expected} // '';
+
+    my $output = "\n";
+
+    # First line: "Received {op} Expected" with bold operator
+    my $received_label = $self->{+COLOR} ? $self->_colorize('Received', 'red') : 'Received';
+    my $expected_label = $self->{+COLOR} ? $self->_colorize('Expected', 'green') : 'Expected';
+    my $op_bold = $self->{+COLOR} ? $self->_colorize($op, 'bold') : $op;
+    $output .= "  $received_label $op_bold $expected_label\n";
+
+    $output .= "\n";
+
+    # Second line: "Expected: {value}"
+    my $expected_label_only = $self->{+COLOR} ? $self->_colorize('Expected:', 'green') : 'Expected:';
+    $output .= "  $expected_label_only $expected\n";
+
+    # Third line: "Received: {value}"
+    my $received_label_only = $self->{+COLOR} ? $self->_colorize('Received:', 'red') : 'Received:';
+    $output .= "  $received_label_only $received\n";
+
+    return $output;
+}
+
+# Render source code context for a failed test
+# Input:
+#   file: string - source file path
+#   line: number - line number where test failed
+# Output: string - formatted source code with context lines
+#   Example:
+#     "\n"
+#     "  ❯ t/test.t:7\n"
+#     "    5 | use Test2::V0;\n"
+#     "    6 | \n"
+#     "  ✘ 7 | is $got, $expected;\n"
+#   Returns empty string if file doesn't exist
+sub _render_failure_source {
+    my ($self, %args) = @_;
+    my $file = $args{file};
+    my $line = $args{line};
+
+    return '' unless $file && $line && -f $file;
+
+    my $output = "\n";
+
+    # Show file path and line number: ❯ t/failed-test.t:7
+    my $arrow = "\x{276F}";  # ❯
+    $arrow = $self->_colorize($arrow, 'gray') if $self->{+COLOR};
+    $output .= "  $arrow $file:$line\n";
+
+    if (open my $fh, '<', $file) {
+        my @lines = <$fh>;
+        close $fh;
+
+        # Show context: 4 lines before the failing line
+        my $start = $line - 5 > 0 ? $line - 5 : 0;
+
+        # Determine end: if failing line has ';', show up to that line
+        # Otherwise, show up to 5 lines after, but stop at first ';'
+        my $end;
+        my $statement_end;  # Track where the statement ends (for bolding)
+        if ($line - 1 < @lines && $lines[$line - 1] =~ /;/) {
+            # Failing line has ';', show only up to that line
+            $end = $line - 1;
+            $statement_end = $line;
+        } else {
+            # Failing line doesn't have ';', look ahead up to 5 lines
+            my $max_end = $line + 4 < @lines ? $line + 4 : $#lines;
+            $end = $max_end;
+            $statement_end = $line;  # Default to failing line only
+
+            # Search for ';' in the next 5 lines
+            for my $i ($line .. $max_end) {
+                if ($lines[$i] =~ /;/) {
+                    $end = $i;
+                    $statement_end = $i + 1;  # Include the line with ';'
+                    last;
+                }
+            }
+        }
+
+        for my $i ($start .. $end) {
+            my $line_num = $i + 1;
+            my $content = $lines[$i];
+            chomp $content;
+
+            # Show ✘ marker with red color before line number for failing statement
+            if ($line_num >= $line && $line_num <= $statement_end) {
+                my $x_mark = "\x{2718}";  # ✘
+                my $red_x = $self->{+COLOR} ? $self->_colorize($x_mark, 'red') : $x_mark;
+                $output .= sprintf("  %s %d | %s\n", $red_x, $line_num, $content);
+            } else {
+                $output .= sprintf("    %d | %s\n", $line_num, $content);
+            }
+        }
+    }
+
+    return $output;
+}
+
+# Render the test summary
+# Input:
+#   fail_count: number - number of failed tests
+#   pass_count: number - number of passed tests
+#   total_count: number - total number of tests
+#   todo_count: number - number of TODO tests
+#   start_time: number - test start timestamp (optional)
+#   start_at: string - ISO 8601 formatted start time (optional)
+#   seed: number - random seed (optional)
+#   end_time: number - test end timestamp
+# Output: string - formatted summary with PASS/FAIL status and statistics
+#   Example:
+#     "\n"
+#     " PASS  All tests successful.\n"
+#     "Files=1, Tests=5, Duration=123.45ms, StartAt=2024-01-01T12:00:00, Seed=12345\n"
+sub _render_summary {
+    my ($self, %args) = @_;
+    my $fail_count = $args{fail_count};
+    my $pass_count = $args{pass_count};
+    my $total_count = $args{total_count};
+    my $todo_count = $args{todo_count};
+    my $start_time = $args{start_time};
+    my $start_at = $args{start_at};
+    my $seed = $args{seed};
+    my $end_time = $args{end_time};
+
+    my $output = "\n";
+
+    # Overall result: PASS or FAIL
+    if ($fail_count > 0) {
+        # Has failures
+        my $fail_label = " FAIL ";
+        my $fail_message = "Tests failed.";
+        if ($self->{+COLOR}) {
+            $fail_label = $self->_colorize($fail_label, 'red_bg');
+            $fail_message = $self->_colorize($fail_message, 'red');
+        }
+        $output .= "$fail_label $fail_message\n";
+    } else {
+        # All tests passed
+        my $pass_label = " PASS ";
+        my $pass_message = "All tests successful.";
+        if ($self->{+COLOR}) {
+            $pass_label = $self->_colorize($pass_label, 'green_bg');
+            $pass_message = $self->_colorize($pass_message, 'green');
+        }
+        $output .= "$pass_label $pass_message\n";
+    }
+
+    # Files and Tests count
+    my $summary = "Files=1, Tests=$total_count";
+
+    # Add Pass/Fail counts if there are failures
+    if ($fail_count > 0) {
+        $summary .= ", Pass=$pass_count, Fail=$fail_count";
+    }
+
+    # Add Todo count if there are TODO tests
+    if ($todo_count > 0) {
+        $summary .= ", Todo=$todo_count";
+    }
+
+    # Add Duration
+    if (defined $start_time) {
+        my $duration_str = $self->_format_duration($start_time, $end_time, 0, 0);  # 0 = no brackets, 0 = no color
+        $summary .= ", Duration=$duration_str";
+    }
+
+    # Add StartAt
+    if ($start_at) {
+        $summary .= ", StartAt=$start_at";
+    }
+
+    # Add Seed
+    if ($seed) {
+        $summary .= ", Seed=$seed";
+    }
+
+    $output .= "$summary\n";
+
+    return $output;
+}
+
 sub finalize {
     my ($self, $options) = @_;
     my $io = $self->{+HANDLES}[OUT_STD];
@@ -389,13 +675,11 @@ sub finalize {
 
     # Print file header (now we know if there were failures)
     if ($self->{+_TEST_FILE}) {
-        my $file = $self->{+_TEST_FILE};
-        my $has_failures = $self->{+_FAIL_COUNT} > 0;
-        my $emoji = $has_failures ? "\x{2718}" : "\x{2713}";
-        my $color = $has_failures ? 'red' : 'green';
-        $emoji = $self->_colorize($emoji, $color);
-
-        print $io "$emoji $file$total_time_str\n";
+        print $io $self->_render_file_header(
+            file => $self->{+_TEST_FILE},
+            total_time_str => $total_time_str,
+            fail_count => $self->{+_FAIL_COUNT},
+        );
     }
 
     # Print buffered output
@@ -404,17 +688,12 @@ sub finalize {
     # Print failure details
     if (@{$self->{+_FAILURES}}) {
         print $io "\n";
-        my $failure_num = 1;
         for my $failure (@{$self->{+_FAILURES}}) {
             # Fail path: FAIL  file > subtest > test
-            my @path_parts = @{$failure->{path}};
-            my $file_path = $failure->{file};
-            my $fail_label = " FAIL ";
-            $fail_label = $self->_colorize($fail_label, 'red_bg') if $self->{+COLOR};
-
-            my $separator_color = $self->{+COLOR} ? $self->_colorize('>', 'gray') : '>';
-            my $path_str = join(" $separator_color ", @path_parts);
-            print $io "$fail_label $file_path $separator_color $path_str\n";
+            print $io $self->_render_failure_header(
+                file_path => $failure->{file},
+                path_parts => $failure->{path},
+            );
 
             # Extract GOT/OP/CHECK data from facet
             my $facet = $failure->{facet};
@@ -430,143 +709,37 @@ sub finalize {
                             my $op = $row->[3] // '';
                             my $expected = $row->[4] // '';
 
-                            print $io "\n";
-                            # First line: "Received {op} Expected" with bold operator
-                            my $received_label = $self->{+COLOR} ? $self->_colorize('Received', 'red') : 'Received';
-                            my $expected_label = $self->{+COLOR} ? $self->_colorize('Expected', 'green') : 'Expected';
-                            my $op_bold = $self->{+COLOR} ? $self->_colorize($op, 'bold') : $op;
-                            print $io "  $received_label $op_bold $expected_label\n";
-
-                            print $io "\n";
-                            # Second line: "Expected: {value}" - only label colored in green
-                            my $expected_label_only = $self->{+COLOR} ? $self->_colorize('Expected:', 'green') : 'Expected:';
-                            print $io "  $expected_label_only $expected\n";
-
-                            # Third line: "Received: {value}" - only label colored in red
-                            my $received_label_only = $self->{+COLOR} ? $self->_colorize('Received:', 'red') : 'Received:';
-                            print $io "  $received_label_only $received\n";
+                            print $io $self->_render_failure_comparison(
+                                received => $received,
+                                op => $op,
+                                expected => $expected,
+                            );
                         }
                     }
                 }
             }
 
             # Source code context
-            my $file = $failure->{file};
-            my $line = $failure->{line};
-            if ($file && $line && -f $file) {
-                print $io "\n";
-                # Show file path and line number: ❯ t/failed-test.t:7
-                my $arrow = "\x{276F}";  # ❯
-                $arrow = $self->_colorize($arrow, 'gray') if $self->{+COLOR};
-                print $io "  $arrow $file:$line\n";
-
-                if (open my $fh, '<', $file) {
-                    my @lines = <$fh>;
-                    close $fh;
-
-                    # Show context: 4 lines before the failing line
-                    my $start = $line - 5 > 0 ? $line - 5 : 0;
-
-                    # Determine end: if failing line has ';', show up to that line
-                    # Otherwise, show up to 5 lines after, but stop at first ';'
-                    my $end;
-                    my $statement_end;  # Track where the statement ends (for bolding)
-                    if ($line - 1 < @lines && $lines[$line - 1] =~ /;/) {
-                        # Failing line has ';', show only up to that line
-                        $end = $line - 1;
-                        $statement_end = $line;
-                    } else {
-                        # Failing line doesn't have ';', look ahead up to 5 lines
-                        my $max_end = $line + 4 < @lines ? $line + 4 : $#lines;
-                        $end = $max_end;
-                        $statement_end = $line;  # Default to failing line only
-
-                        # Search for ';' in the next 5 lines
-                        for my $i ($line .. $max_end) {
-                            if ($lines[$i] =~ /;/) {
-                                $end = $i;
-                                $statement_end = $i + 1;  # Include the line with ';'
-                                last;
-                            }
-                        }
-                    }
-
-                    for my $i ($start .. $end) {
-                        my $line_num = $i + 1;
-                        my $content = $lines[$i];
-                        chomp $content;
-
-                        # Show ✘ marker with red color before line number for failing statement
-                        if ($line_num >= $line && $line_num <= $statement_end) {
-                            my $x_mark = "\x{2718}";  # ✘
-                            my $red_x = $self->{+COLOR} ? $self->_colorize($x_mark, 'red') : $x_mark;
-                            print $io sprintf("  %s %d | %s\n", $red_x, $line_num, $content);
-                        } else {
-                            print $io sprintf("    %d | %s\n", $line_num, $content);
-                        }
-                    }
-                }
-            }
+            print $io $self->_render_failure_source(
+                file => $failure->{file},
+                line => $failure->{line},
+            );
 
             print $io "\n";
-            $failure_num++;
         }
     }
 
     # Print summary
-    print $io "\n";
-
-    # Overall result: PASS or FAIL
-    if ($self->{+_FAIL_COUNT} > 0) {
-        # Has failures
-        my $fail_label = " FAIL ";
-        my $fail_message = "Tests failed.";
-        if ($self->{+COLOR}) {
-            $fail_label = $self->_colorize($fail_label, 'red_bg');
-            $fail_message = $self->_colorize($fail_message, 'red');
-        }
-        print $io "$fail_label $fail_message\n";
-    } else {
-        # All tests passed
-        my $pass_label = " PASS ";
-        my $pass_message = "All tests successful.";
-        if ($self->{+COLOR}) {
-            $pass_label = $self->_colorize($pass_label, 'green_bg');
-            $pass_message = $self->_colorize($pass_message, 'green');
-        }
-        print $io "$pass_label $pass_message\n";
-    }
-
-    # Files and Tests count
-    my $summary = "Files=1, Tests=$self->{+_TOTAL_COUNT}";
-
-    # Add Pass/Fail counts if there are failures
-    if ($self->{+_FAIL_COUNT} > 0) {
-        $summary .= ", Pass=$self->{+_PASS_COUNT}, Fail=$self->{+_FAIL_COUNT}";
-    }
-
-    # Add Todo count if there are TODO tests
-    if ($self->{+_TODO_COUNT} > 0) {
-        $summary .= ", Todo=$self->{+_TODO_COUNT}";
-    }
-
-    # Add Duration
-    if (defined $self->{+_START_TIME}) {
-        my $duration_str = $self->_format_duration($self->{+_START_TIME}, $end_time, 0, 0);  # 0 = no brackets, 0 = no color
-        $summary .= ", Duration=$duration_str";
-    }
-
-    # Add StartAt
-    if ($self->{+_START_AT}) {
-        $summary .= ", StartAt=$self->{+_START_AT}";
-    }
-
-    # Add Seed
-    if ($self->{+_SEED}) {
-        $summary .= ", Seed=$self->{+_SEED}";
-    }
-
-    print $io "$summary\n";
+    print $io $self->_render_summary(
+        fail_count => $self->{+_FAIL_COUNT},
+        pass_count => $self->{+_PASS_COUNT},
+        total_count => $self->{+_TOTAL_COUNT},
+        todo_count => $self->{+_TODO_COUNT},
+        start_time => $self->{+_START_TIME},
+        start_at => $self->{+_START_AT},
+        seed => $self->{+_SEED},
+        end_time => $end_time,
+    );
 
     return;
 }
