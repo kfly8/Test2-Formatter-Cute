@@ -235,7 +235,6 @@ When running multiple test files with `prove -PCute`, aggregate the results from
     ✓ ok works
     ✓ is works
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  PASS  All tests successful.
 Files=2, Tests=4, Duration=3.80ms
@@ -243,7 +242,6 @@ Files=2, Tests=4, Duration=3.80ms
 
 - Display details for each test file (subtest tree)
 - **Do not display** individual summary lines for each test file
-- Separator line (80 gray ━ characters)
 - Final summary
   - ` PASS ` has green background (including surrounding spaces, black text, bold)
   - `All tests successful.` is green text
@@ -289,7 +287,6 @@ Files=2, Tests=4, Duration=3.80ms
     7 |   is 1-1, 1, 'case2';
   ✘ 8 |   is 0-1, 1, 'case3';
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  FAIL  Tests failed.
 Files=2, Tests=5, Pass=3, Fail=2, FailedFiles=1, Duration=3.60ms
@@ -300,7 +297,6 @@ Failed files:
 
 - Display details for each test file (subtest tree, failure details)
 - **Do not display** individual summary lines for each test file
-- Separator line (80 gray ━ characters)
 - Final summary
   - ` FAIL ` has red background (including surrounding spaces, black text, bold)
   - `Tests failed.` is red text
@@ -343,7 +339,6 @@ Failed files:
     ✓ ok works
     ✓ is works
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  PASS  All tests successful.
 Files=2, Tests=3, Todo=2, Duration=3.30ms
@@ -389,7 +384,6 @@ Note: Pattern matching must handle ANSI color codes that may be present in the o
 
 ## Color Specification (for prove plugin)
 
-- **Separator line**: `\e[90m` (gray)
 - **PASS background**: `\e[42m\e[1m\e[38;5;16m` (green background + bold + dark black text)
 - **FAIL background**: `\e[41m\e[1m\e[38;5;16m` (red background + bold + dark black text)
 - **Success message**: `\e[32m` (green text)

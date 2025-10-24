@@ -225,15 +225,14 @@ sub _print_final_summary {
     }
 
     # Color codes
-    my $GRAY = $use_color ? "\e[90m" : '';
     my $GREEN = $use_color ? "\e[32m" : '';
     my $RED = $use_color ? "\e[31m" : '';
     my $GREEN_BG = $use_color ? "\e[42m\e[1m\e[38;5;16m" : '';
     my $RED_BG = $use_color ? "\e[41m\e[1m\e[38;5;16m" : '';
     my $RESET = $use_color ? "\e[0m" : '';
 
-    # Print separator line
-    print $GRAY . ('━' x 80) . $RESET . "\n\n";
+    # Print blank line before summary
+    print "\n";
 
     # Determine if all tests passed
     my $all_passed = scalar(@$failed_files) == 0;
