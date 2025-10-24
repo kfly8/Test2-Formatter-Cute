@@ -2,6 +2,8 @@ package Test2::Formatter::Cute;
 use strict;
 use warnings;
 
+our $VERSION = '0.01';
+
 use Time::HiRes qw(time);
 use Test2::Util qw(clone_io);
 use Test2::Util::HashBase qw(
@@ -744,3 +746,150 @@ sub finalize {
 }
 
 1;
+
+__END__
+
+=encoding utf8
+
+=head1 NAME
+
+Test2::Formatter::Cute - Test2 formatter with cute output
+
+=head1 SYNOPSIS
+
+  ❯ T2_FORMATTER=Cute perl -Ilib t/examples/basic.pl
+  ✓ t/examples/basic.pl [0.46ms]
+    ✓ foo [0.30ms]
+      ✓ nested foo1 [0.06ms]
+        ✓ case1
+        ✓ case2
+      ✓ nested foo2 [0.03ms]
+        ✓ case1
+        ✓ case2
+
+  PASS  All tests successful.
+  Files=1, Tests=7, Duration=0.46ms, Seed=20251025
+
+=head1 DESCRIPTION
+
+Test2::Formatter::Cute is a Test2 formatter that makes test output visually clearer and easier to read.
+
+=head2 Features
+
+=over 4
+
+=item * Emoji-based test results (✓ for pass, ✘ for fail)
+
+=item * Hierarchical subtest display with proper indentation
+
+=item * Detailed failure information with source code context
+
+=item * Execution time tracking for tests and subtests
+
+=back
+
+=head2 Output Format
+
+The formatter produces output like:
+
+  ✓ t/basic.t [12.34ms]
+    ✓ basic test
+    ✓ subtest [5.67ms]
+      ✓ nested test 1
+      ✓ nested test 2
+
+   PASS  All tests successful.
+  Files=1, Tests=3, Duration=12.34ms, Seed=20251024
+
+For failed tests, detailed information is displayed:
+
+  ✘ t/failed.t [10.50ms]
+    ✓ passing test
+    ✘ failing test
+
+   FAIL  t/failed.t > failing test
+
+    Received eq Expected
+
+    Expected: foo
+    Received: bar
+
+    ❯ t/failed.t:7
+      5 | use Test2::V0;
+      6 |
+    ✘ 7 | is $got, $expected;
+
+   FAIL  Tests failed.
+  Files=1, Tests=2, Pass=1, Fail=1, Duration=10.50ms, Seed=20251024
+
+=head1 INTEGRATION
+
+=head2 With prove
+
+Use L<App::Prove::Plugin::Cute> for the best experience:
+
+  prove -PCute -lv t/
+
+=head1 METHODS
+
+=head2 new
+
+  my $formatter = Test2::Formatter::Cute->new(%options);
+
+Creates a new formatter instance.
+
+Options:
+
+=over 4
+
+=item * C<color> - Enable/disable color output (default: auto-detect from terminal)
+
+=item * C<encoding> - Set output encoding (default: UTF-8)
+
+=item * C<handles> - Array reference of output handles [STDOUT, STDERR]
+
+=back
+
+=head2 write
+
+  $formatter->write($event, $num);
+
+Processes a Test2 event and buffers output.
+
+=head2 finalize
+
+  $formatter->finalize();
+
+Outputs buffered content with file header, failure details, and summary.
+
+=head2 encoding
+
+  $formatter->encoding($encoding);
+  my $enc = $formatter->encoding();
+
+Get or set the output encoding.
+
+=head2 hide_buffered
+
+  my $bool = $formatter->hide_buffered();
+
+Returns true to indicate this formatter buffers output.
+
+=head1 SEE ALSO
+
+=over 4
+
+=item * L<App::Prove::Plugin::Cute> - Prove plugin for easy usage
+
+=back
+
+=head1 AUTHOR
+
+kfly8
+
+=head1 LICENSE
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

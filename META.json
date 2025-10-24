@@ -1,7 +1,7 @@
 {
-   "abstract" : "It's new $module",
+   "abstract" : "Test2 formatter with cute output",
    "author" : [
-      "kobaken <kentafly88@gmail.com>"
+      "kfly8"
    ],
    "dynamic_config" : 0,
    "generated_by" : "Minilla/v3.1.28, CPAN::Meta::Converter version 2.150010",
@@ -42,17 +42,36 @@
       },
       "runtime" : {
          "requires" : {
-            "perl" : "5.008001"
+            "Test2::Formatter" : "0.000060",
+            "Test2::Util" : "0.000060",
+            "Test2::Util::HashBase" : "0.000060",
+            "perl" : "5.016"
          }
       },
       "test" : {
          "requires" : {
-            "Test::More" : "0.98"
+            "Capture::Tiny" : "0",
+            "Test2::V0" : "0.000060"
          }
       }
    },
    "release_status" : "unstable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/kfly8/Test2-Formatter-Cute/issues"
+      },
+      "homepage" : "https://github.com/kfly8/Test2-Formatter-Cute",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/kfly8/Test2-Formatter-Cute.git",
+         "web" : "https://github.com/kfly8/Test2-Formatter-Cute"
+      }
+   },
    "version" : "0.01",
+   "x_contributors" : [
+      "Claude <noreply@anthropic.com>",
+      "kobaken <kentafly88@gmail.com>"
+   ],
    "x_serialization_backend" : "JSON::PP version 4.16",
    "x_static_install" : 1
 }
