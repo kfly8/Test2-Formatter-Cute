@@ -56,6 +56,9 @@ subtest 'failure details - source code context' => sub {
     # case3 is split across multiple lines, so check both parts
     like($stdout, qr/is 0-1,/, 'shows source code for case3 (line 1)');
     like($stdout, qr/'case3'/, 'shows source code for case3 (line 2)');
+
+    # Line numbers should be right-aligned
+    like($stdout, qr/    \d+ \|/, 'line numbers are right-aligned (single digit lines have padding)');
 };
 
 subtest 'summary shows failures' => sub {

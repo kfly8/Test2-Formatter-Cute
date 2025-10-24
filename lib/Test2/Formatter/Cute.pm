@@ -552,6 +552,10 @@ sub _render_failure_source {
             }
         }
 
+        # Calculate max line number width for alignment
+        my $max_line_num = $end + 1;
+        my $line_num_width = length($max_line_num);
+
         for my $i ($start .. $end) {
             my $line_num = $i + 1;
             my $content = $lines[$i];
@@ -561,9 +565,9 @@ sub _render_failure_source {
             if ($line_num >= $line && $line_num <= $statement_end) {
                 my $x_mark = "\x{2718}";  # ✘
                 my $red_x = $self->{+COLOR} ? $self->_colorize($x_mark, 'red') : $x_mark;
-                $output .= sprintf("  %s %d | %s\n", $red_x, $line_num, $content);
+                $output .= sprintf("  %s %*d | %s\n", $red_x, $line_num_width, $line_num, $content);
             } else {
-                $output .= sprintf("    %d | %s\n", $line_num, $content);
+                $output .= sprintf("    %*d | %s\n", $line_num_width, $line_num, $content);
             }
         }
     }
