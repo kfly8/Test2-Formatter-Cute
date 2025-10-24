@@ -92,9 +92,9 @@ sub _format_duration {
         $formatted = sprintf("%.2fs", $duration);
     }
 
-    # Default to brackets for backward compatibility
+    # Default to brackets
     $with_brackets = 1 unless defined $with_brackets;
-    # Default to gray color for backward compatibility
+    # Default to gray color
     $with_color = 1 unless defined $with_color;
 
     my $text = $with_brackets ? "[$formatted]" : $formatted;
