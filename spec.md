@@ -380,10 +380,12 @@ Within the `_runtests` method of `App::Prove::Plugin::Cute`:
 
 #### Removing Summary Lines
 
-- Remove lines starting with ` PASS  All tests successful.`
-- Remove lines starting with ` FAIL  Tests failed.`
+- Remove lines containing `PASS` followed by `All tests successful`
+- Remove lines containing `FAIL` followed by `Tests failed`
 - Remove summary statistics lines starting with `Files=...`
 - Keep failure detail lines in the format ` FAIL  file > test > case` (do not remove)
+
+Note: Pattern matching must handle ANSI color codes that may be present in the output (e.g., `\e[42m\e[1m\e[38;5;16m PASS \e[0m`). Use flexible patterns like `/PASS.*All\s+tests\s+successful/` instead of strict start-of-line patterns.
 
 ## Color Specification (for prove plugin)
 
