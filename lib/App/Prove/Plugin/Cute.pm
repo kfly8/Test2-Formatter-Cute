@@ -191,9 +191,14 @@ sub _remove_summary_lines {
 
     for my $line (@lines) {
         # Skip only final summary lines (not failure details)
-        # Summary lines start with " PASS  All tests" or " FAIL  Tests failed"
-        next if $line =~ /^\s*PASS\s+All tests/;
-        next if $line =~ /^\s*FAIL\s+Tests failed/;
+        # Note: Lines may contain ANSI color codes like \e[42m\e[1m\e[38;5;16m PASS \e[0m
+        # Use a flexible pattern that allows for escape sequences
+
+        # Remove " PASS  All tests successful." (with possible color codes)
+        next if $line =~ /PASS.*All\s+tests\s+successful/;
+        # Remove " FAIL  Tests failed." (with possible color codes)
+        next if $line =~ /FAIL.*Tests\s+failed/;
+        # Remove "Files=..." summary statistics line
         next if $line =~ /^Files=\d+/;
 
         push @filtered, $line;
