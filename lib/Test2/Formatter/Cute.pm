@@ -751,32 +751,26 @@ __END__
 
 =head1 NAME
 
-Test2::Formatter::Cute - Test2 formatter with cute emoji output
+Test2::Formatter::Cute - Test2 formatter with cute output
 
 =head1 SYNOPSIS
 
-  use Test2::V0;
-  use Test2::Formatter::Cute;
+  ❯ T2_FORMATTER=Cute perl -Ilib t/examples/basic.pl
+  ✓ t/examples/basic.pl [0.46ms]
+    ✓ foo [0.30ms]
+      ✓ nested foo1 [0.06ms]
+        ✓ case1
+        ✓ case2
+      ✓ nested foo2 [0.03ms]
+        ✓ case1
+        ✓ case2
 
-  # Use directly
-  $ENV{T2_FORMATTER} = 'Cute';
-
-  # Or set in test file
-  use Test2::V0;
-  use Test2::Plugin::SRand;
-  use Test2::Tools::Subtest qw(subtest);
-
-  subtest 'example' => sub {
-      ok 1, 'test 1';
-      ok 0, 'test 2';
-  };
-
-  done_testing;
+  PASS  All tests successful.
+  Files=1, Tests=7, Duration=0.46ms, Seed=20251025
 
 =head1 DESCRIPTION
 
 Test2::Formatter::Cute is a Test2 formatter that makes test output visually clearer and easier to read.
-It uses emoji characters and colors to provide better visual feedback during testing.
 
 =head2 Features
 
@@ -784,19 +778,11 @@ It uses emoji characters and colors to provide better visual feedback during tes
 
 =item * Emoji-based test results (✓ for pass, ✘ for fail)
 
-=item * Color-coded output (green for pass, red for fail, gray for TODO)
-
 =item * Hierarchical subtest display with proper indentation
 
 =item * Detailed failure information with source code context
 
 =item * Execution time tracking for tests and subtests
-
-=item * TODO test support
-
-=item * UTF-8 support with automatic encoding detection
-
-=item * Comprehensive test summary with statistics
 
 =back
 
@@ -834,27 +820,13 @@ For failed tests, detailed information is displayed:
    FAIL  Tests failed.
   Files=1, Tests=2, Pass=1, Fail=1, Duration=10.50ms, Seed=20251024
 
-=head1 CONFIGURATION
+=head1 INTEGRATION
 
-=head2 Color Output
+=head2 With prove
 
-Color output is automatically enabled when output is to a terminal.
-You can control this behavior using the C<T2_FORMATTER_CUTE_COLOR> environment variable:
+Use L<App::Prove::Plugin::Cute> for the best experience:
 
-  # Disable color
-  T2_FORMATTER_CUTE_COLOR=0 prove t/test.t
-
-  # Force enable color
-  T2_FORMATTER_CUTE_COLOR=1 prove t/test.t
-
-=head2 Encoding
-
-The formatter automatically enables UTF-8 output for emoji support.
-You can set a different encoding using the C<encoding> parameter:
-
-  my $formatter = Test2::Formatter::Cute->new(
-      encoding => 'UTF-8',
-  );
+  prove -PCute -lv t/
 
 =head1 METHODS
 
@@ -901,61 +873,11 @@ Get or set the output encoding.
 
 Returns true to indicate this formatter buffers output.
 
-=head1 ENVIRONMENT VARIABLES
-
-=over 4
-
-=item * C<T2_FORMATTER_CUTE_COLOR>
-
-Control color output (0 = disable, 1 = enable).
-
-=item * C<T2_RAND_SEED>
-
-Random seed value (set by Test2::Plugin::SRand).
-
-=back
-
-=head1 UNICODE OUTPUT
-
-This formatter uses the following Unicode characters:
-
-=over 4
-
-=item * U+2713 (✓) - Check mark for passing tests
-
-=item * U+2718 (✘) - X mark for failing tests
-
-=item * U+276F (❯) - Right arrow for source file indicator
-
-=back
-
-Ensure your terminal supports UTF-8 encoding for proper display.
-
-=head1 INTEGRATION
-
-=head2 With prove
-
-Use L<App::Prove::Plugin::Cute> for the best experience:
-
-  prove -PCute -lv t/
-
-=head2 Programmatic Usage
-
-  use Test2::API qw(test2_stack);
-  use Test2::Formatter::Cute;
-
-  my $formatter = Test2::Formatter::Cute->new(color => 1);
-  test2_stack->top->format($formatter);
-
 =head1 SEE ALSO
 
 =over 4
 
 =item * L<App::Prove::Plugin::Cute> - Prove plugin for easy usage
-
-=item * L<Test2::Formatter> - Base formatter class
-
-=item * L<Test2::V0> - Recommended Test2 bundle
 
 =back
 
