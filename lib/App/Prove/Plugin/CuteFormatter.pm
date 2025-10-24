@@ -8,15 +8,26 @@ App::Prove::Plugin::CuteFormatter - Prove plugin to enable Test2::Formatter::Cut
 
 =head1 SYNOPSIS
 
-  prove -PCuteFormatter t/
+  # Use with prove
+  prove -PCuteFormatter -l t/
+
+  # Run multiple tests
+  prove -PCuteFormatter -l t/*.t
+
+  # Enable debug mode
+  T2_FORMATTER_CUTE_DEBUG=1 prove -PCuteFormatter -l t/
 
 =head1 DESCRIPTION
 
-This plugin attempts to bridge the gap between prove's TAP-based architecture
-and Test2::Formatter::Cute's event-based formatting.
+This plugin enables Test2::Formatter::Cute to work with the prove command by:
 
-WARNING: This is experimental and may not work as expected due to fundamental
-architectural differences between TAP::Harness and Test2::Formatter.
+1. Setting T2_FORMATTER=Cute environment variable
+2. Monkey-patching App::Prove::_runtests to bypass TAP::Harness
+3. Running tests directly with Test2::Formatter::Cute
+4. Providing a test summary
+
+This approach completely bypasses TAP parsing, allowing the cute emoji format
+to be displayed properly.
 
 =cut
 
@@ -27,17 +38,71 @@ sub load {
 
     print "Loading CuteFormatter plugin...\n";
 
-    # The key insight: We need to set T2_FORMATTER environment variable
-    # so that the TEST ITSELF uses Test2::Formatter::Cute when it runs
+    # Set T2_FORMATTER environment variable for test execution
     $ENV{T2_FORMATTER} = 'Cute';
     print "Set T2_FORMATTER=Cute for test execution\n";
 
-    # We also need a TAP::Formatter that just passes through
-    # or we can leave it as default and let prove show TAP parsing results
-    # $app->formatter('TAP::Formatter::Console');
+    # Monkey patch App::Prove::_runtests to bypass TAP::Harness
+    # and run tests directly with Test2::Formatter::Cute
+    {
+        no warnings 'redefine';
+        my $original_runtests = \&App::Prove::_runtests;
 
-    # Disable prove's verbose mode to avoid double output
-    # $app->quiet(1);
+        *App::Prove::_runtests = sub {
+            my ( $self, $args, @tests ) = @_;
+
+            print "Running tests with Test2::Formatter::Cute (bypassing TAP::Harness)...\n\n";
+
+            # Build lib arguments
+            my @lib_args = ();
+            if ($args->{lib}) {
+                @lib_args = map { ("-I", $_) } @{ $args->{lib} };
+            }
+
+            # Build switches arguments
+            my @switches = ();
+            if ($args->{switches}) {
+                @switches = @{ $args->{switches} };
+            }
+
+            # Track results
+            my $total_tests = scalar @tests;
+            my $passed_tests = 0;
+            my $failed_tests = 0;
+
+            # Run each test directly
+            for my $test (@tests) {
+                my @cmd = ($^X, @switches, @lib_args, $test);
+
+                # Show command in debug mode
+                if ($ENV{T2_FORMATTER_CUTE_DEBUG}) {
+                    print "# Running: @cmd\n\n";
+                }
+
+                my $exit_code = system(@cmd);
+
+                if ($exit_code == 0) {
+                    $passed_tests++;
+                } else {
+                    $failed_tests++;
+                }
+
+                print "\n";
+            }
+
+            # Print summary
+            print "=" x 70, "\n";
+            print "Test Summary:\n";
+            print "  Total: $total_tests\n";
+            print "  Passed: $passed_tests\n";
+            print "  Failed: $failed_tests\n";
+            print "=" x 70, "\n";
+
+            return $failed_tests == 0;
+        };
+    }
+
+    print "Monkey-patched App::Prove::_runtests\n";
 
     return 1;
 }
@@ -46,33 +111,40 @@ sub load {
 
 __END__
 
-=head1 ARCHITECTURE NOTES
+=head1 HOW IT WORKS
 
-The fundamental problem:
+This plugin uses monkey-patching to override App::Prove::_runtests:
 
-1. prove runs tests and captures STDOUT (TAP format: "ok 1", "1..5", etc.)
-2. TAP::Parser parses this TAP string into Result objects
-3. TAP::Formatter::Console formats the Results for display
+1. Sets T2_FORMATTER=Cute environment variable
+2. Overrides App::Prove::_runtests method
+3. Bypasses TAP::Harness completely
+4. Runs each test file directly: perl -I lib t/test.t
+5. Collects exit codes and displays a summary
 
-But Test2::Formatter::Cute works differently:
+=head1 ALTERNATIVES
 
-1. Tests emit Test2::Event objects directly
-2. Test2::Formatter::Cute receives these events
-3. It formats them into cute emoji output
+If you prefer a more official approach, consider using Test2::Harness:
 
-When using prove:
-- Tests using Test2 will still emit events to Test2::Formatter (set via T2_FORMATTER)
-- But prove also expects TAP output for its own parsing
-- These two paths are independent
+  # Install yath
+  cpanm Test2::Harness
 
-=head1 RECOMMENDATION
-
-For proper Test2::Formatter::Cute support, use 'yath' instead of 'prove':
-
+  # Run tests with yath (native Test2::Formatter support)
   yath test t/
 
-Or set T2_FORMATTER environment variable:
+Or run tests directly:
 
-  T2_FORMATTER=Cute perl t/test.t
+  T2_FORMATTER=Cute perl -Ilib t/test.t
+
+=head1 ENVIRONMENT VARIABLES
+
+=over 4
+
+=item * C<T2_FORMATTER_CUTE_DEBUG>
+
+When set to 1, displays the exact command being run for each test.
+
+  T2_FORMATTER_CUTE_DEBUG=1 prove -PCuteFormatter -l t/
+
+=back
 
 =cut
