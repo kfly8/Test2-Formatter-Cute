@@ -52,6 +52,9 @@ sub load {
         *App::Prove::_runtests = sub {
             my ( $self, $args, @tests ) = @_;
 
+            # Check verbose mode (verbosity > 0 means -v was passed)
+            my $verbose = ($args->{verbosity} || 0) > 0;
+
             # Build lib arguments
             my @lib_args = ();
             if ($args->{lib}) {
@@ -123,10 +126,17 @@ sub load {
                     push @failed_files, $test;
                 }
 
-                # Filter out summary lines and print
-                my $filtered_output = _remove_summary_lines($output);
-                print $filtered_output;
-                print "\n";
+                if ($verbose) {
+                    # Verbose mode: show full output without individual file summaries
+                    my $filtered_output = _remove_summary_lines($output);
+                    print $filtered_output . "\n";
+                } else {
+                    # Non-verbose mode: show only file header (first line)
+                    my @lines = split /\n/, $output;
+                    if (@lines > 0) {
+                        print $lines[0] . "\n";
+                    }
+                }
             }
 
             # Print final summary
@@ -138,6 +148,7 @@ sub load {
                 todo => $total_todo,
                 duration => $total_duration,
                 failed_files => \@failed_files,
+                verbose => $verbose,
             );
 
             return scalar(@failed_files) == 0;
@@ -217,6 +228,7 @@ sub _print_final_summary {
     my $todo = $args{todo};
     my $duration = $args{duration};
     my $failed_files = $args{failed_files} || [];
+    my $verbose = $args{verbose} || 0;
 
     # Check if color is disabled
     my $use_color = 1;
@@ -253,8 +265,8 @@ sub _print_final_summary {
         push @parts, "Todo=$todo" if $todo > 0;
         push @parts, sprintf("Duration=%.2fms", $duration);
         print join(", ", @parts) . "\n";
-        # Print failed files list
-        if (@$failed_files) {
+        # Print failed files list (only in verbose mode)
+        if ($verbose && @$failed_files) {
             print "Failed files:\n";
             for my $file (@$failed_files) {
                 print "  " . $RED . $file . $RESET . "\n";
