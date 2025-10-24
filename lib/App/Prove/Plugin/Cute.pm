@@ -1,0 +1,304 @@
+package App::Prove::Plugin::Cute;
+use strict;
+use warnings;
+
+sub load {
+    my ($class, $p) = @_;
+    my @args = @{ $p->{args} };
+    my $app = $p->{app_prove};
+
+    # Set T2_FORMATTER environment variable for test execution
+    $ENV{T2_FORMATTER} = 'Cute';
+
+    # Enable color by default (since we capture output, -t check fails)
+    # Users can still disable with T2_FORMATTER_CUTE_COLOR=0
+    $ENV{T2_FORMATTER_CUTE_COLOR} = 1 unless defined $ENV{T2_FORMATTER_CUTE_COLOR};
+
+    # Monkey patch App::Prove::_runtests to bypass TAP::Harness
+    # and run tests directly with Test2::Formatter::Cute
+    {
+        no warnings 'redefine';
+        my $original_runtests = \&App::Prove::_runtests;
+
+        *App::Prove::_runtests = sub {
+            my ( $self, $args, @tests ) = @_;
+
+            # Check verbose mode (verbosity > 0 means -v was passed)
+            my $verbose = ($args->{verbosity} || 0) > 0;
+
+            # Build lib arguments
+            my @lib_args = ();
+            if ($args->{lib}) {
+                @lib_args = map { ("-I", $_) } @{ $args->{lib} };
+            }
+
+            # Build switches arguments
+            my @switches = ();
+            if ($args->{switches}) {
+                @switches = @{ $args->{switches} };
+            }
+
+            # Track results
+            my $total_files = scalar @tests;
+            my $total_tests = 0;
+            my $total_pass = 0;
+            my $total_fail = 0;
+            my $total_todo = 0;
+            my $total_duration = 0;
+            my @failed_files = ();
+            my $first_seed;
+
+            # Run each test directly
+            for my $test (@tests) {
+                my @cmd = ($^X, @switches, @lib_args, $test);
+
+                # Capture output for parsing
+                open my $fh, '-|', @cmd or die "Cannot run test: $!";
+
+                my $output = '';
+                while (my $line = <$fh>) {
+                    $output .= $line;
+                }
+                close $fh;
+                my $exit_code = $?;
+
+                # Parse summary line from output
+                my $summary = _parse_summary($output);
+
+                # Accumulate statistics
+                my $tests = $summary->{tests} || 0;
+                my $pass = $summary->{pass};
+                my $fail = $summary->{fail};
+
+                # If Pass/Fail not explicitly provided, calculate from exit code
+                if (!defined $pass && !defined $fail) {
+                    if ($exit_code == 0) {
+                        $pass = $tests;
+                        $fail = 0;
+                    } else {
+                        # Cannot determine exact pass/fail split without explicit counts
+                        # But we know there was at least one failure
+                        $pass = 0;
+                        $fail = 0;
+                    }
+                }
+
+                $total_tests += $tests;
+                $total_pass += (defined $pass ? $pass : 0);
+                $total_fail += (defined $fail ? $fail : 0);
+                $total_todo += $summary->{todo} || 0;
+                $total_duration += $summary->{duration} || 0;
+
+                # Capture Seed from the first test
+                if (!defined $first_seed && defined $summary->{seed}) {
+                    $first_seed = $summary->{seed};
+                }
+
+                if ($exit_code != 0) {
+                    push @failed_files, $test;
+                }
+
+                if ($verbose) {
+                    # Verbose mode: show full output without individual file summaries
+                    my $filtered_output = _remove_summary_lines($output);
+                    print $filtered_output . "\n";
+                } else {
+                    # Non-verbose mode: show only file header (first line)
+                    my @lines = split /\n/, $output;
+                    if (@lines > 0) {
+                        print $lines[0] . "\n";
+                    }
+                }
+            }
+
+            # Print final summary
+            _print_final_summary(
+                files => $total_files,
+                tests => $total_tests,
+                pass => $total_pass,
+                fail => $total_fail,
+                todo => $total_todo,
+                duration => $total_duration,
+                failed_files => \@failed_files,
+                verbose => $verbose,
+                seed => $first_seed,
+            );
+
+            return scalar(@failed_files) == 0;
+        };
+    }
+
+    return 1;
+}
+
+sub _parse_summary {
+    my ($output) = @_;
+
+    my %result = (
+        tests => 0,
+        todo => 0,
+        duration => 0,
+        # pass and fail are undefined by default to distinguish
+        # "no explicit Pass/Fail in summary" from "Pass=0, Fail=0"
+    );
+
+    # Find summary line like: Files=1, Tests=7, Duration=1.10ms, Seed=12345
+    # Match the entire line after Files=
+    if ($output =~ /Files=\d+[^\n]*/) {
+        my $summary_line = $&;
+
+        if ($summary_line =~ /Tests=(\d+)/) {
+            $result{tests} = $1;
+        }
+        if ($summary_line =~ /Pass=(\d+)/) {
+            $result{pass} = $1;
+        }
+        if ($summary_line =~ /Fail=(\d+)/) {
+            $result{fail} = $1;
+        }
+        if ($summary_line =~ /Todo=(\d+)/) {
+            $result{todo} = $1;
+        }
+        if ($summary_line =~ /Duration=([\d.]+)(ms|s)/) {
+            $result{duration} = $1;
+            $result{duration_unit} = $2;
+        }
+        if ($summary_line =~ /Seed=([^,\s]+)/) {
+            $result{seed} = $1;
+        }
+    }
+
+    return \%result;
+}
+
+sub _remove_summary_lines {
+    my ($output) = @_;
+
+    my @lines = split /\n/, $output, -1;
+    my @filtered;
+
+    for my $line (@lines) {
+        # Skip only final summary lines (not failure details)
+        # Note: Lines may contain ANSI color codes like \e[42m\e[1m\e[38;5;16m PASS \e[0m
+        # Use a flexible pattern that allows for escape sequences
+
+        # Remove " PASS  All tests successful." (with possible color codes)
+        next if $line =~ /PASS.*All\s+tests\s+successful/;
+        # Remove " FAIL  Tests failed." (with possible color codes)
+        next if $line =~ /FAIL.*Tests\s+failed/;
+        # Remove "Files=..." summary statistics line
+        next if $line =~ /^Files=\d+/;
+
+        push @filtered, $line;
+    }
+
+    return join("\n", @filtered);
+}
+
+sub _print_final_summary {
+    my %args = @_;
+
+    my $files = $args{files};
+    my $tests = $args{tests};
+    my $pass = $args{pass};
+    my $fail = $args{fail};
+    my $todo = $args{todo};
+    my $duration = $args{duration};
+    my $failed_files = $args{failed_files} || [];
+    my $verbose = $args{verbose} || 0;
+    my $seed = $args{seed};
+
+    # Check if color is disabled
+    my $use_color = 1;
+    if (defined $ENV{T2_FORMATTER_CUTE_COLOR}) {
+        $use_color = $ENV{T2_FORMATTER_CUTE_COLOR} ? 1 : 0;
+    }
+
+    # Color codes
+    my $GREEN = $use_color ? "\e[32m" : '';
+    my $RED = $use_color ? "\e[31m" : '';
+    my $GREEN_BG = $use_color ? "\e[42m\e[1m\e[38;5;16m" : '';
+    my $RED_BG = $use_color ? "\e[41m\e[1m\e[38;5;16m" : '';
+    my $RESET = $use_color ? "\e[0m" : '';
+
+    # Determine if all tests passed
+    my $all_passed = scalar(@$failed_files) == 0;
+
+    if ($all_passed) {
+        # Success case
+        print $GREEN_BG . " PASS " . $RESET . " " . $GREEN . "All tests successful." . $RESET . "\n";
+        # Build summary line
+        my @parts = ("Files=$files", "Tests=$tests");
+        push @parts, "Todo=$todo" if $todo > 0;
+        push @parts, sprintf("Duration=%.2fms", $duration);
+        push @parts, "Seed=$seed" if defined $seed;
+        print join(", ", @parts) . "\n";
+    } else {
+        # Failure case
+        print $RED_BG . " FAIL " . $RESET . " " . $RED . "Tests failed." . $RESET . "\n";
+        # Build summary line
+        my @parts = ("Files=$files", "Tests=$tests");
+        push @parts, "Pass=$pass" if $pass > 0;
+        push @parts, "Fail=$fail" if $fail > 0;
+        push @parts, "Todo=$todo" if $todo > 0;
+        push @parts, sprintf("Duration=%.2fms", $duration);
+        push @parts, "Seed=$seed" if defined $seed;
+        print join(", ", @parts) . "\n";
+        # Print failed files list (only in verbose mode)
+        if ($verbose && @$failed_files) {
+            print "Failed files:\n";
+            for my $file (@$failed_files) {
+                print "  " . $RED . $file . $RESET . "\n";
+            }
+        }
+    }
+}
+
+1;
+
+__END__
+
+=encoding utf8
+
+=head1 NAME
+
+App::Prove::Plugin::Cute - Makes your test output cute and easy
+
+=head1 SYNOPSIS
+
+  prove -PCute -lvr t/
+
+=head1 DESCRIPTION
+
+App::Prove::Plugin::Cute makes your Perl test output visually clearer and easier.
+The following is an example output:
+
+  ✘ t/examples/failed.pl [0.75ms]
+    ✘ foo [0.52ms]
+      ✓ case1
+      ✘ case2
+      ✘ case3
+
+   FAIL t/examples/failed.pl > foo > case2
+
+    Received eq Expected
+
+    Expected: 1
+    Received: 0
+
+    ❯ t/examples/failed.pl:5
+      1 | use Test2::V0;
+      2 |
+      3 | subtest 'foo' => sub {
+      4 |     is 1+1, 2, 'case1';
+    ✘ 5 |     is 1-1, 1, 'case2';
+
+  FAIL Tests failed.
+  Files=1, Tests=3, Pass=1, Fail=2, Duration=0.71ms, Seed=20251024
+  Failed files:
+    t/examples/failed.pl
+
+=head1 SEE ALSO
+
+L<Test2::Formatter::Cute>
+

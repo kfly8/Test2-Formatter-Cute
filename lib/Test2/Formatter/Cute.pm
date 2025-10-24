@@ -92,9 +92,9 @@ sub _format_duration {
         $formatted = sprintf("%.2fs", $duration);
     }
 
-    # Default to brackets for backward compatibility
+    # Default to brackets
     $with_brackets = 1 unless defined $with_brackets;
-    # Default to gray color for backward compatibility
+    # Default to gray color
     $with_color = 1 unless defined $with_color;
 
     my $text = $with_brackets ? "[$formatted]" : $formatted;
@@ -521,7 +521,7 @@ sub _render_failure_source {
     $arrow = $self->_colorize($arrow, 'gray') if $self->{+COLOR};
     $output .= "  $arrow $file:$line\n";
 
-    if (open my $fh, '<', $file) {
+    if (open my $fh, '<:utf8', $file) {
         my @lines = <$fh>;
         close $fh;
 
@@ -552,6 +552,10 @@ sub _render_failure_source {
             }
         }
 
+        # Calculate max line number width for alignment
+        my $max_line_num = $end + 1;
+        my $line_num_width = length($max_line_num);
+
         for my $i ($start .. $end) {
             my $line_num = $i + 1;
             my $content = $lines[$i];
@@ -561,9 +565,9 @@ sub _render_failure_source {
             if ($line_num >= $line && $line_num <= $statement_end) {
                 my $x_mark = "\x{2718}";  # ✘
                 my $red_x = $self->{+COLOR} ? $self->_colorize($x_mark, 'red') : $x_mark;
-                $output .= sprintf("  %s %d | %s\n", $red_x, $line_num, $content);
+                $output .= sprintf("  %s %*d | %s\n", $red_x, $line_num_width, $line_num, $content);
             } else {
-                $output .= sprintf("    %d | %s\n", $line_num, $content);
+                $output .= sprintf("    %*d | %s\n", $line_num_width, $line_num, $content);
             }
         }
     }
@@ -585,7 +589,7 @@ sub _render_failure_source {
 #   Example:
 #     "\n"
 #     " PASS  All tests successful.\n"
-#     "Files=1, Tests=5, Duration=123.45ms, StartAt=2024-01-01T12:00:00, Seed=12345\n"
+#     "Files=1, Tests=5, Duration=123.45ms, Seed=12345\n"
 sub _render_summary {
     my ($self, %args) = @_;
     my $fail_count = $args{fail_count};
@@ -637,11 +641,6 @@ sub _render_summary {
     if (defined $start_time) {
         my $duration_str = $self->_format_duration($start_time, $end_time, 0, 0);  # 0 = no brackets, 0 = no color
         $summary .= ", Duration=$duration_str";
-    }
-
-    # Add StartAt
-    if ($start_at) {
-        $summary .= ", StartAt=$start_at";
     }
 
     # Add Seed

@@ -31,8 +31,8 @@ subtest 'failure details - no separator lines' => sub {
 
 subtest 'failure details - test path' => sub {
     # spec: FAIL  t/failed-test.t > foo > case2 (no ./ prefix, extra space after FAIL)
-    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo > case2/, 'shows failure path for case2');
-    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo > case3/, 'shows failure path for case3');
+    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo☺️ > case2/, 'shows failure path for case2');
+    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo☺️ > case3/, 'shows failure path for case3');
 };
 
 subtest 'failure details - comparison format' => sub {
@@ -56,6 +56,9 @@ subtest 'failure details - source code context' => sub {
     # case3 is split across multiple lines, so check both parts
     like($stdout, qr/is 0-1,/, 'shows source code for case3 (line 1)');
     like($stdout, qr/'case3'/, 'shows source code for case3 (line 2)');
+
+    # Line numbers should be right-aligned
+    like($stdout, qr/    \d+ \|/, 'line numbers are right-aligned (single digit lines have padding)');
 };
 
 subtest 'summary shows failures' => sub {

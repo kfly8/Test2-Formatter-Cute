@@ -34,7 +34,7 @@ subtest 'summary display' => sub {
     like($stdout, qr/^Files=1, Tests=7, Duration=\d+(?:\.\d+)?(?:ms|s)/m, 'shows file, test counts and duration');
     unlike($stdout, qr/Pass=/, 'no Pass count when all tests pass');
     unlike($stdout, qr/Fail=/, 'no Fail count when all tests pass');
-    like($stdout, qr/StartAt=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/m, 'shows start time');
+    unlike($stdout, qr/StartAt=/, 'no StartAt in summary');
     like($stdout, qr/Seed=\d+/m, 'shows seed');
 };
 
