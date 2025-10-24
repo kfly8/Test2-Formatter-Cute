@@ -2,6 +2,8 @@ package Test2::Formatter::Cute;
 use strict;
 use warnings;
 
+our $VERSION = '0.01';
+
 use Time::HiRes qw(time);
 use Test2::Util qw(clone_io);
 use Test2::Util::HashBase qw(
