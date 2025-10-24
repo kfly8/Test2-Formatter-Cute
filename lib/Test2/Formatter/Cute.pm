@@ -521,7 +521,7 @@ sub _render_failure_source {
     $arrow = $self->_colorize($arrow, 'gray') if $self->{+COLOR};
     $output .= "  $arrow $file:$line\n";
 
-    if (open my $fh, '<', $file) {
+    if (open my $fh, '<:utf8', $file) {
         my @lines = <$fh>;
         close $fh;
 

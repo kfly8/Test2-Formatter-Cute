@@ -31,8 +31,8 @@ subtest 'failure details - no separator lines' => sub {
 
 subtest 'failure details - test path' => sub {
     # spec: FAIL  t/failed-test.t > foo > case2 (no ./ prefix, extra space after FAIL)
-    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo > case2/, 'shows failure path for case2');
-    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo > case3/, 'shows failure path for case3');
+    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo☺️ > case2/, 'shows failure path for case2');
+    like($stdout, qr/\sFAIL\s+t\/examples\/failed.pl > foo☺️ > case3/, 'shows failure path for case3');
 };
 
 subtest 'failure details - comparison format' => sub {
