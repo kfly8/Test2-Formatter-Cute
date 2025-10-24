@@ -75,6 +75,7 @@ sub load {
             my $total_todo = 0;
             my $total_duration = 0;
             my @failed_files = ();
+            my $first_seed;
 
             # Run each test directly
             for my $test (@tests) {
@@ -122,6 +123,11 @@ sub load {
                 $total_todo += $summary->{todo} || 0;
                 $total_duration += $summary->{duration} || 0;
 
+                # Capture Seed from the first test
+                if (!defined $first_seed && defined $summary->{seed}) {
+                    $first_seed = $summary->{seed};
+                }
+
                 if ($exit_code != 0) {
                     push @failed_files, $test;
                 }
@@ -149,6 +155,7 @@ sub load {
                 duration => $total_duration,
                 failed_files => \@failed_files,
                 verbose => $verbose,
+                seed => $first_seed,
             );
 
             return scalar(@failed_files) == 0;
@@ -169,8 +176,9 @@ sub _parse_summary {
         # "no explicit Pass/Fail in summary" from "Pass=0, Fail=0"
     );
 
-    # Find summary line like: Files=1, Tests=7, Duration=1.10ms, ...
-    if ($output =~ /Files=\d+.*?Duration=[\d.]+\w+/) {
+    # Find summary line like: Files=1, Tests=7, Duration=1.10ms, Seed=12345
+    # Match the entire line after Files=
+    if ($output =~ /Files=\d+[^\n]*/) {
         my $summary_line = $&;
 
         if ($summary_line =~ /Tests=(\d+)/) {
@@ -188,6 +196,9 @@ sub _parse_summary {
         if ($summary_line =~ /Duration=([\d.]+)(ms|s)/) {
             $result{duration} = $1;
             $result{duration_unit} = $2;
+        }
+        if ($summary_line =~ /Seed=([^,\s]+)/) {
+            $result{seed} = $1;
         }
     }
 
@@ -229,6 +240,7 @@ sub _print_final_summary {
     my $duration = $args{duration};
     my $failed_files = $args{failed_files} || [];
     my $verbose = $args{verbose} || 0;
+    my $seed = $args{seed};
 
     # Check if color is disabled
     my $use_color = 1;
@@ -253,6 +265,7 @@ sub _print_final_summary {
         my @parts = ("Files=$files", "Tests=$tests");
         push @parts, "Todo=$todo" if $todo > 0;
         push @parts, sprintf("Duration=%.2fms", $duration);
+        push @parts, "Seed=$seed" if defined $seed;
         print join(", ", @parts) . "\n";
     } else {
         # Failure case
@@ -261,9 +274,9 @@ sub _print_final_summary {
         my @parts = ("Files=$files", "Tests=$tests");
         push @parts, "Pass=$pass" if $pass > 0;
         push @parts, "Fail=$fail" if $fail > 0;
-        push @parts, "FailedFiles=" . scalar(@$failed_files);
         push @parts, "Todo=$todo" if $todo > 0;
         push @parts, sprintf("Duration=%.2fms", $duration);
+        push @parts, "Seed=$seed" if defined $seed;
         print join(", ", @parts) . "\n";
         # Print failed files list (only in verbose mode)
         if ($verbose && @$failed_files) {

@@ -585,7 +585,7 @@ sub _render_failure_source {
 #   Example:
 #     "\n"
 #     " PASS  All tests successful.\n"
-#     "Files=1, Tests=5, Duration=123.45ms, StartAt=2024-01-01T12:00:00, Seed=12345\n"
+#     "Files=1, Tests=5, Duration=123.45ms, Seed=12345\n"
 sub _render_summary {
     my ($self, %args) = @_;
     my $fail_count = $args{fail_count};
@@ -637,11 +637,6 @@ sub _render_summary {
     if (defined $start_time) {
         my $duration_str = $self->_format_duration($start_time, $end_time, 0, 0);  # 0 = no brackets, 0 = no color
         $summary .= ", Duration=$duration_str";
-    }
-
-    # Add StartAt
-    if ($start_at) {
-        $summary .= ", StartAt=$start_at";
     }
 
     # Add Seed

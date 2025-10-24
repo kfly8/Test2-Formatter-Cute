@@ -377,7 +377,7 @@ subtest '_render_summary' => sub {
         unlike($result, qr/Pass=/, 'no Pass count when all pass');
         unlike($result, qr/Fail=/, 'no Fail count when all pass');
         like($result, qr/Duration=1\.23s/, 'shows duration in seconds when over 1s');
-        like($result, qr/StartAt=2025-09-08T17:26:43/, 'shows start time');
+        unlike($result, qr/StartAt=/, 'no StartAt in summary');
         like($result, qr/Seed=12345/, 'shows seed');
     };
 
