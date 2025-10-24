@@ -199,11 +199,11 @@ Note: Total test count is 1 (only `pass case`). The 2 TODO tests are excluded an
 
 ---
 
-# App::Prove::Plugin::CuteFormatter Aggregation Feature Specification
+# App::Prove::Plugin::Cute Aggregation Feature Specification
 
 ## Overview
 
-When running multiple test files with `prove -PCuteFormatter`, aggregate the results from each file and display a final summary.
+When running multiple test files with `prove -PCute`, aggregate the results from each file and display a final summary.
 
 ## Requirements
 
@@ -370,7 +370,7 @@ Files=1, Tests=1, Todo=2, Duration=1.00ms, StartAt=2025-09-08T17:26:43, Seed=202
 
 #### Implementation Details
 
-Within the `_runtests` method of `App::Prove::Plugin::CuteFormatter`:
+Within the `_runtests` method of `App::Prove::Plugin::Cute`:
 
 1. Capture standard output from each test
 2. Parse summary lines to extract information

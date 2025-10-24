@@ -1,21 +1,21 @@
-package App::Prove::Plugin::CuteFormatter;
+package App::Prove::Plugin::Cute;
 use strict;
 use warnings;
 
 =head1 NAME
 
-App::Prove::Plugin::CuteFormatter - Prove plugin to enable Test2::Formatter::Cute
+App::Prove::Plugin::Cute - Prove plugin to enable Test2::Formatter::Cute
 
 =head1 SYNOPSIS
 
   # Use with prove
-  prove -PCuteFormatter -l t/
+  prove -PCute -l t/
 
   # Run multiple tests
-  prove -PCuteFormatter -l t/*.t
+  prove -PCute -l t/*.t
 
   # Enable debug mode
-  T2_FORMATTER_CUTE_DEBUG=1 prove -PCuteFormatter -l t/
+  T2_FORMATTER_CUTE_DEBUG=1 prove -PCute -l t/
 
 =head1 DESCRIPTION
 
