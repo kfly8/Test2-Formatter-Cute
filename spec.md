@@ -37,7 +37,6 @@ subtest 'foo' => sub {
 Output:
 
 ```
-# T2_RAND_SEED=20251023164910123
 ✓ ./t/test.t [1.10ms]
   ✓ foo [1.05ms]
     ✓ nested foo1 [0.73ms]
