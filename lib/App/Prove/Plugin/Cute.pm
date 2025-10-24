@@ -231,26 +231,20 @@ sub _print_final_summary {
     my $RED_BG = $use_color ? "\e[41m\e[1m\e[38;5;16m" : '';
     my $RESET = $use_color ? "\e[0m" : '';
 
-    # Print blank line before summary
-    print "\n";
-
     # Determine if all tests passed
     my $all_passed = scalar(@$failed_files) == 0;
 
     if ($all_passed) {
         # Success case
-        print $GREEN_BG . " PASS " . $RESET . "  " . $GREEN . "All tests successful." . $RESET . "\n";
-
+        print $GREEN_BG . " PASS " . $RESET . " " . $GREEN . "All tests successful." . $RESET . "\n";
         # Build summary line
         my @parts = ("Files=$files", "Tests=$tests");
         push @parts, "Todo=$todo" if $todo > 0;
         push @parts, sprintf("Duration=%.2fms", $duration);
-
         print join(", ", @parts) . "\n";
     } else {
         # Failure case
-        print $RED_BG . " FAIL " . $RESET . "  " . $RED . "Tests failed." . $RESET . "\n";
-
+        print $RED_BG . " FAIL " . $RESET . " " . $RED . "Tests failed." . $RESET . "\n";
         # Build summary line
         my @parts = ("Files=$files", "Tests=$tests");
         push @parts, "Pass=$pass" if $pass > 0;
@@ -258,12 +252,10 @@ sub _print_final_summary {
         push @parts, "FailedFiles=" . scalar(@$failed_files);
         push @parts, "Todo=$todo" if $todo > 0;
         push @parts, sprintf("Duration=%.2fms", $duration);
-
         print join(", ", @parts) . "\n";
-
         # Print failed files list
         if (@$failed_files) {
-            print "\nFailed files:\n";
+            print "Failed files:\n";
             for my $file (@$failed_files) {
                 print "  " . $RED . $file . $RESET . "\n";
             }

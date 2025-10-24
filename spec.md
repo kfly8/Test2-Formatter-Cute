@@ -235,8 +235,7 @@ When running multiple test files with `prove -PCute`, aggregate the results from
     ✓ ok works
     ✓ is works
 
-
- PASS  All tests successful.
+ PASS All tests successful.
 Files=2, Tests=4, Duration=3.80ms
 ```
 
@@ -244,7 +243,7 @@ Files=2, Tests=4, Duration=3.80ms
 - **Do not display** individual summary lines for each test file
 - Final summary
   - ` PASS ` has green background (including surrounding spaces, black text, bold)
-  - `All tests successful.` is green text
+  - `All tests successful.` is green text (1 space after ` PASS `)
   - `Files=N, Tests=M, Duration=X.XXms`
     - `Files`: Number of test files executed
     - `Tests`: Total number of tests (excluding TODO)
@@ -287,10 +286,8 @@ Files=2, Tests=4, Duration=3.80ms
     7 |   is 1-1, 1, 'case2';
   ✘ 8 |   is 0-1, 1, 'case3';
 
-
- FAIL  Tests failed.
+ FAIL Tests failed.
 Files=2, Tests=5, Pass=3, Fail=2, FailedFiles=1, Duration=3.60ms
-
 Failed files:
   t/failed-test.t
 ```
@@ -299,7 +296,7 @@ Failed files:
 - **Do not display** individual summary lines for each test file
 - Final summary
   - ` FAIL ` has red background (including surrounding spaces, black text, bold)
-  - `Tests failed.` is red text
+  - `Tests failed.` is red text (1 space after ` FAIL `)
   - `Files=N, Tests=M, Pass=P, Fail=F, FailedFiles=X, Duration=Y.YYms`
     - `Files`: Number of test files executed
     - `Tests`: Total number of tests (excluding TODO)
@@ -339,8 +336,7 @@ Failed files:
     ✓ ok works
     ✓ is works
 
-
- PASS  All tests successful.
+ PASS All tests successful.
 Files=2, Tests=3, Todo=2, Duration=3.30ms
 ```
 
