@@ -1,3 +1,10 @@
+# Force TAP output before loading Test2::V0
+BEGIN {
+    # Make sure we use TAP formatter for this test file, not Cute
+    delete $ENV{T2_FORMATTER};
+    $ENV{T2_FORMATTER} = 'TAP';
+}
+
 use Test2::V0;
 use Test2::Plugin::UTF8;
 use Test2::Formatter::Cute;
