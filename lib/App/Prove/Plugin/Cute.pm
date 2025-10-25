@@ -10,9 +10,18 @@ sub load {
     # Set T2_FORMATTER environment variable for test execution
     $ENV{T2_FORMATTER} = 'Cute';
 
-    # Enable color by default (since we capture output, -t check fails)
-    # Users can still disable with T2_FORMATTER_CUTE_COLOR=0
-    $ENV{T2_FORMATTER_CUTE_COLOR} = 1 unless defined $ENV{T2_FORMATTER_CUTE_COLOR};
+    # Check if color is disabled via --nocolor option
+    # App::Prove stores color setting in the 'color' attribute
+    unless (defined $ENV{T2_FORMATTER_CUTE_COLOR}) {
+        # If --nocolor was passed, $app->color will be 0
+        # If --color was passed or color is auto-detected, $app->color will be 1
+        if (defined $app->color) {
+            $ENV{T2_FORMATTER_CUTE_COLOR} = $app->color;
+        } else {
+            # Default to enabled (since we capture output, -t check fails)
+            $ENV{T2_FORMATTER_CUTE_COLOR} = 1;
+        }
+    }
 
     # Monkey patch App::Prove::_runtests to bypass TAP::Harness
     # and run tests directly with Test2::Formatter::Cute
@@ -22,6 +31,9 @@ sub load {
 
         *App::Prove::_runtests = sub {
             my ( $self, $args, @tests ) = @_;
+
+            # Filter out non-test files (e.g., prove options that got into @tests)
+            @tests = grep { -f $_ } @tests;
 
             # Check verbose mode (verbosity > 0 means -v was passed)
             my $verbose = ($args->{verbosity} || 0) > 0;
@@ -36,6 +48,9 @@ sub load {
             my @switches = ();
             if ($args->{switches}) {
                 @switches = @{ $args->{switches} };
+                # Filter out invalid switches like '--nocolor' or '---color'
+                # These are prove options, not perl switches
+                @switches = grep { !/^--/ } @switches;
             }
 
             # Track results
