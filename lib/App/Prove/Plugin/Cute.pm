@@ -23,8 +23,8 @@ sub load {
         }
     }
 
-    # Monkey patch App::Prove::_runtests to bypass TAP::Harness
-    # and run tests directly with Test2::Formatter::Cute
+    # Monkey patch App::Prove::_runtests to use TAP::Harness::Cute
+    # which supports Test2::Formatter::Cute's non-TAP output
     {
         no warnings 'redefine';
         my $original_runtests = \&App::Prove::_runtests;
@@ -32,176 +32,39 @@ sub load {
         *App::Prove::_runtests = sub {
             my ( $self, $args, @tests ) = @_;
 
-            # Check verbose mode (verbosity > 0 means -v was passed)
-            my $verbose = ($args->{verbosity} || 0) > 0;
+            # Load our custom harness
+            require TAP::Harness::Cute;
 
-            # Build lib arguments
-            my @lib_args = ();
-            if ($args->{lib}) {
-                @lib_args = map { ("-I", $_) } @{ $args->{lib} };
-            }
+            # Create harness with App::Prove's settings
+            my $harness = TAP::Harness::Cute->new({
+                verbosity => $args->{verbosity} || 0,
+                jobs => $args->{jobs} || 1,
+                lib => $args->{lib} || [],
+                switches => $args->{switches} || [],
+                color => $ENV{T2_FORMATTER_CUTE_COLOR} // 1,
+            });
 
-            # Build switches arguments
-            my @switches = ();
-            if ($args->{switches}) {
-                @switches = @{ $args->{switches} };
-            }
+            # Run tests through our custom harness
+            my $stats = $harness->runtests(@tests);
 
-            # Track results
-            my $total_files = scalar @tests;
-            my $total_tests = 0;
-            my $total_pass = 0;
-            my $total_fail = 0;
-            my $total_todo = 0;
-            my $total_duration = 0;
-            my @failed_files = ();
-            my $first_seed;
-
-            # Run each test directly
-            for my $test (@tests) {
-                my @cmd = ($^X, @switches, @lib_args, $test);
-
-                # Capture output for parsing
-                open my $fh, '-|', @cmd or die "Cannot run test: $!";
-
-                my $output = '';
-                while (my $line = <$fh>) {
-                    $output .= $line;
-                }
-                close $fh;
-                my $exit_code = $?;
-
-                # Parse summary line from output
-                my $summary = _parse_summary($output);
-
-                # Accumulate statistics
-                my $tests = $summary->{tests} || 0;
-                my $pass = $summary->{pass};
-                my $fail = $summary->{fail};
-
-                # If Pass/Fail not explicitly provided, calculate from exit code
-                if (!defined $pass && !defined $fail) {
-                    if ($exit_code == 0) {
-                        $pass = $tests;
-                        $fail = 0;
-                    } else {
-                        # Cannot determine exact pass/fail split without explicit counts
-                        # But we know there was at least one failure
-                        $pass = 0;
-                        $fail = 0;
-                    }
-                }
-
-                $total_tests += $tests;
-                $total_pass += (defined $pass ? $pass : 0);
-                $total_fail += (defined $fail ? $fail : 0);
-                $total_todo += $summary->{todo} || 0;
-                $total_duration += $summary->{duration} || 0;
-
-                # Capture Seed from the first test
-                if (!defined $first_seed && defined $summary->{seed}) {
-                    $first_seed = $summary->{seed};
-                }
-
-                if ($exit_code != 0) {
-                    push @failed_files, $test;
-                }
-
-                if ($verbose) {
-                    # Verbose mode: show full output without individual file summaries
-                    my $filtered_output = _remove_summary_lines($output);
-                    print $filtered_output . "\n";
-                } else {
-                    # Non-verbose mode: show only file header (first line)
-                    my @lines = split /\n/, $output;
-                    if (@lines > 0) {
-                        print $lines[0] . "\n";
-                    }
-                }
-            }
-
-            # Print final summary
+            # Print final summary in Cute format
             _print_final_summary(
-                files => $total_files,
-                tests => $total_tests,
-                pass => $total_pass,
-                fail => $total_fail,
-                todo => $total_todo,
-                duration => $total_duration,
-                failed_files => \@failed_files,
-                verbose => $verbose,
-                seed => $first_seed,
+                files => $stats->{files},
+                tests => $stats->{tests},
+                pass => $stats->{pass},
+                fail => $stats->{fail},
+                todo => $stats->{todo},
+                duration => $stats->{duration},
+                failed_files => $stats->{failed_files},
+                verbose => ($args->{verbosity} || 0) > 0,
+                seed => $stats->{seed},
             );
 
-            return scalar(@failed_files) == 0;
+            return scalar(@{$stats->{failed_files}}) == 0;
         };
     }
 
     return 1;
-}
-
-sub _parse_summary {
-    my ($output) = @_;
-
-    my %result = (
-        tests => 0,
-        todo => 0,
-        duration => 0,
-        # pass and fail are undefined by default to distinguish
-        # "no explicit Pass/Fail in summary" from "Pass=0, Fail=0"
-    );
-
-    # Find summary line like: Files=1, Tests=7, Duration=1.10ms, Seed=12345
-    # Match the entire line after Files=
-    if ($output =~ /Files=\d+[^\n]*/) {
-        my $summary_line = $&;
-
-        if ($summary_line =~ /Tests=(\d+)/) {
-            $result{tests} = $1;
-        }
-        if ($summary_line =~ /Pass=(\d+)/) {
-            $result{pass} = $1;
-        }
-        if ($summary_line =~ /Fail=(\d+)/) {
-            $result{fail} = $1;
-        }
-        if ($summary_line =~ /Todo=(\d+)/) {
-            $result{todo} = $1;
-        }
-        if ($summary_line =~ /Duration=([\d.]+)(ms|s)/) {
-            $result{duration} = $1;
-            $result{duration_unit} = $2;
-        }
-        if ($summary_line =~ /Seed=([^,\s]+)/) {
-            $result{seed} = $1;
-        }
-    }
-
-    return \%result;
-}
-
-sub _remove_summary_lines {
-    my ($output) = @_;
-
-    my @lines = split /\n/, $output, -1;
-    my @filtered;
-
-    for my $line (@lines) {
-        # Skip only final summary lines (not failure details)
-        # Note: Lines may contain ANSI color codes like \e[42m\e[1m\e[38;5;16m PASS \e[0m
-        # Use a flexible pattern that allows for escape sequences
-
-        # Remove " PASS  All tests successful." (with possible color codes)
-        next if $line =~ /PASS.*All\s+tests\s+successful/;
-        # Remove " FAIL  Tests failed." (with possible color codes)
-        next if $line =~ /FAIL.*Tests\s+failed/;
-        # Remove "Files=..." summary statistics line
-        next if $line =~ /^Files=\d+/;
-
-        push @filtered, $line;
-    }
-
-    return join("\n", @filtered);
 }
 
 sub _print_final_summary {
@@ -279,7 +142,13 @@ App::Prove::Plugin::Cute - Makes your test output cute and easy
 
 =head1 DESCRIPTION
 
-App::Prove::Plugin::Cute makes your Perl test output visually clearer and easier.
+App::Prove::Plugin::Cute makes your Perl test output visually clearer and easier
+by configuring L<Test2::Formatter::Cute> as the test formatter.
+
+This plugin delegates test execution to TAP::Harness (via C<make_harness>),
+which supports features like parallel test execution (C<-j> option). The plugin
+preserves the Cute formatter output while providing an aggregated summary.
+
 The following is an example output:
 
   ✘ t/examples/failed.pl [0.75ms]
