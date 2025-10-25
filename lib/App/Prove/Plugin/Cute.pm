@@ -23,8 +23,8 @@ sub load {
         }
     }
 
-    # Monkey patch App::Prove::_runtests to delegate test execution to TAP::Harness
-    # while preserving Test2::Formatter::Cute output formatting
+    # Monkey patch App::Prove::_runtests to use TAP::Harness::Cute
+    # which supports Test2::Formatter::Cute's non-TAP output
     {
         no warnings 'redefine';
         my $original_runtests = \&App::Prove::_runtests;
@@ -32,197 +32,39 @@ sub load {
         *App::Prove::_runtests = sub {
             my ( $self, $args, @tests ) = @_;
 
-            # Check verbose mode (verbosity > 0 means -v was passed)
-            my $verbose = ($args->{verbosity} || 0) > 0;
+            # Load our custom harness
+            require TAP::Harness::Cute;
 
-            # Capture output from original _runtests which uses TAP::Harness
-            # This supports parallel execution via -j option, etc.
-            my $output = '';
-            {
-                # Temporarily redirect STDOUT to capture harness output
-                local *STDOUT;
-                open STDOUT, '>', \$output or die "Cannot redirect STDOUT: $!";
+            # Create harness with App::Prove's settings
+            my $harness = TAP::Harness::Cute->new({
+                verbosity => $args->{verbosity} || 0,
+                jobs => $args->{jobs} || 1,
+                lib => $args->{lib} || [],
+                switches => $args->{switches} || [],
+                color => $ENV{T2_FORMATTER_CUTE_COLOR} // 1,
+            });
 
-                # Run tests through original implementation (uses TAP::Harness)
-                $original_runtests->($self, $args, @tests);
-            }
-
-            # Parse the captured output for statistics
-            my %stats = (
-                files => scalar(@tests),
-                tests => 0,
-                pass => 0,
-                fail => 0,
-                todo => 0,
-                duration => 0,
-                seed => undef,
-                failed_files => [],
-            );
-
-            # Extract and aggregate statistics from each test file's Cute formatter output
-            # Note: Output may contain ANSI color codes, so we strip them first
-            my $clean_output = $output;
-            $clean_output =~ s/\x1b\[[0-9;]*m//g;  # Remove ANSI color codes (\x1b = ESC)
-
-            # DEBUG: Print clean output
-            if ($ENV{DEBUG_CUTE_PLUGIN}) {
-                warn "=== CLEAN OUTPUT ===\n$clean_output\n=== END ===\n";
-            }
-
-            my @lines = split /\n/, $clean_output;
-            for my $line (@lines) {
-                # Each test file outputs its own summary line like:
-                # "Files=1, Tests=7, Duration=1.10ms, Seed=12345"
-                # We need to aggregate these
-                if ($line =~ /Files=\d+/) {
-                    # Summary line found, parse it
-                    if ($line =~ /Tests=(\d+)/) {
-                        $stats{tests} += $1;
-                    }
-                    if ($line =~ /Pass=(\d+)/) {
-                        $stats{pass} += $1;
-                    }
-                    if ($line =~ /Fail=(\d+)/) {
-                        $stats{fail} += $1;
-                    }
-                    if ($line =~ /Todo=(\d+)/) {
-                        $stats{todo} += $1;
-                    }
-                    if ($line =~ /Duration=([\d.]+)(ms|s)/) {
-                        my $duration = $1;
-                        my $unit = $2;
-                        # Convert to ms if needed
-                        $duration *= 1000 if $unit eq 's';
-                        $stats{duration} += $duration;
-                    }
-                    # Capture seed from first test (if available)
-                    if (!defined $stats{seed} && $line =~ /Seed=([^,\s]+)/) {
-                        $stats{seed} = $1;
-                    }
-                }
-            }
-
-            # Use original output (with colors) for display
-            @lines = split /\n/, $output;
-
-            # Display the captured output (preserves Cute formatting)
-            # Remove Cute formatter's own summary to avoid duplication
-            my $filtered_output = _remove_summary_lines($output);
-
-            if ($verbose) {
-                # Verbose mode: show full output without final summaries
-                print $filtered_output . "\n" if $filtered_output;
-            } else {
-                # Non-verbose mode: show only file headers (first line of each test)
-                my @filtered_lines = split /\n/, $filtered_output;
-                for my $line (@filtered_lines) {
-                    # Print lines that look like file headers (e.g., "✓ t/test.t [1.23ms]")
-                    # Use clean version for matching but print original
-                    my $clean_line = $line;
-                    $clean_line =~ s/\x1b\[[0-9;]*m//g;  # Remove ANSI codes
-                    if ($clean_line =~ /^[✓✘] /) {
-                        print $line . "\n";
-                    }
-                }
-            }
-
-            # Determine failed files from output (use clean output)
-            # Look for "✘" markers or "FAIL" in file headers
-            my @failed_files = ();
-            my @clean_lines = split /\n/, $clean_output;
-            for my $line (@clean_lines) {
-                # File header lines look like: "✘ t/test.t [1.23ms]" or "✓ t/test.t [1.23ms]"
-                if ($line =~ /^✘\s+(.+?)\s+\[[\d.]+m?s\]/) {
-                    push @failed_files, $1;
-                }
-                # Also check for lines with "FAIL" and file paths
-                elsif ($line =~ /FAIL\s+(.+\.t)/) {
-                    push @failed_files, $1 unless grep { $_ eq $1 } @failed_files;
-                }
-            }
+            # Run tests through our custom harness
+            my $stats = $harness->runtests(@tests);
 
             # Print final summary in Cute format
             _print_final_summary(
-                files => $stats{files},
-                tests => $stats{tests},
-                pass => $stats{pass},
-                fail => $stats{fail},
-                todo => $stats{todo},
-                duration => $stats{duration},
-                failed_files => \@failed_files,
-                verbose => $verbose,
-                seed => $stats{seed},
+                files => $stats->{files},
+                tests => $stats->{tests},
+                pass => $stats->{pass},
+                fail => $stats->{fail},
+                todo => $stats->{todo},
+                duration => $stats->{duration},
+                failed_files => $stats->{failed_files},
+                verbose => ($args->{verbosity} || 0) > 0,
+                seed => $stats->{seed},
             );
 
-            return scalar(@failed_files) == 0;
+            return scalar(@{$stats->{failed_files}}) == 0;
         };
     }
 
     return 1;
-}
-
-sub _parse_summary {
-    my ($output) = @_;
-
-    my %result = (
-        tests => 0,
-        todo => 0,
-        duration => 0,
-        # pass and fail are undefined by default to distinguish
-        # "no explicit Pass/Fail in summary" from "Pass=0, Fail=0"
-    );
-
-    # Find summary line like: Files=1, Tests=7, Duration=1.10ms, Seed=12345
-    # Match the entire line after Files=
-    if ($output =~ /Files=\d+[^\n]*/) {
-        my $summary_line = $&;
-
-        if ($summary_line =~ /Tests=(\d+)/) {
-            $result{tests} = $1;
-        }
-        if ($summary_line =~ /Pass=(\d+)/) {
-            $result{pass} = $1;
-        }
-        if ($summary_line =~ /Fail=(\d+)/) {
-            $result{fail} = $1;
-        }
-        if ($summary_line =~ /Todo=(\d+)/) {
-            $result{todo} = $1;
-        }
-        if ($summary_line =~ /Duration=([\d.]+)(ms|s)/) {
-            $result{duration} = $1;
-            $result{duration_unit} = $2;
-        }
-        if ($summary_line =~ /Seed=([^,\s]+)/) {
-            $result{seed} = $1;
-        }
-    }
-
-    return \%result;
-}
-
-sub _remove_summary_lines {
-    my ($output) = @_;
-
-    my @lines = split /\n/, $output, -1;
-    my @filtered;
-
-    for my $line (@lines) {
-        # Skip only final summary lines (not failure details)
-        # Note: Lines may contain ANSI color codes like \e[42m\e[1m\e[38;5;16m PASS \e[0m
-        # Use a flexible pattern that allows for escape sequences
-
-        # Remove " PASS  All tests successful." (with possible color codes)
-        next if $line =~ /PASS.*All\s+tests\s+successful/;
-        # Remove " FAIL  Tests failed." (with possible color codes)
-        next if $line =~ /FAIL.*Tests\s+failed/;
-        # Remove "Files=..." summary statistics line
-        next if $line =~ /^Files=\d+/;
-
-        push @filtered, $line;
-    }
-
-    return join("\n", @filtered);
 }
 
 sub _print_final_summary {
