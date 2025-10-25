@@ -32,9 +32,6 @@ sub load {
         *App::Prove::_runtests = sub {
             my ( $self, $args, @tests ) = @_;
 
-            # Filter out non-test files (e.g., prove options that got into @tests)
-            @tests = grep { -f $_ } @tests;
-
             # Check verbose mode (verbosity > 0 means -v was passed)
             my $verbose = ($args->{verbosity} || 0) > 0;
 
@@ -48,9 +45,6 @@ sub load {
             my @switches = ();
             if ($args->{switches}) {
                 @switches = @{ $args->{switches} };
-                # Filter out invalid switches like '--nocolor' or '---color'
-                # These are prove options, not perl switches
-                @switches = grep { !/^--/ } @switches;
             }
 
             # Track results
