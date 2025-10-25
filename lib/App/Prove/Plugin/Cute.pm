@@ -35,19 +35,16 @@ sub load {
             # Check verbose mode (verbosity > 0 means -v was passed)
             my $verbose = ($args->{verbosity} || 0) > 0;
 
-            # Get the harness that App::Prove would use
+            # Capture output from original _runtests which uses TAP::Harness
             # This supports parallel execution via -j option, etc.
-            my $harness = $self->make_harness;
-
-            # Capture harness output to parse Cute formatter summary
             my $output = '';
             {
                 # Temporarily redirect STDOUT to capture harness output
                 local *STDOUT;
                 open STDOUT, '>', \$output or die "Cannot redirect STDOUT: $!";
 
-                # Run tests through TAP::Harness (supports -j for parallel execution)
-                $harness->runtests(@tests);
+                # Run tests through original implementation (uses TAP::Harness)
+                $original_runtests->($self, $args, @tests);
             }
 
             # Parse the captured output for statistics
@@ -63,7 +60,16 @@ sub load {
             );
 
             # Extract and aggregate statistics from each test file's Cute formatter output
-            my @lines = split /\n/, $output;
+            # Note: Output may contain ANSI color codes, so we strip them first
+            my $clean_output = $output;
+            $clean_output =~ s/\x1b\[[0-9;]*m//g;  # Remove ANSI color codes (\x1b = ESC)
+
+            # DEBUG: Print clean output
+            if ($ENV{DEBUG_CUTE_PLUGIN}) {
+                warn "=== CLEAN OUTPUT ===\n$clean_output\n=== END ===\n";
+            }
+
+            my @lines = split /\n/, $clean_output;
             for my $line (@lines) {
                 # Each test file outputs its own summary line like:
                 # "Files=1, Tests=7, Duration=1.10ms, Seed=12345"
@@ -96,30 +102,42 @@ sub load {
                 }
             }
 
+            # Use original output (with colors) for display
+            @lines = split /\n/, $output;
+
             # Display the captured output (preserves Cute formatting)
+            # Remove Cute formatter's own summary to avoid duplication
+            my $filtered_output = _remove_summary_lines($output);
+
             if ($verbose) {
                 # Verbose mode: show full output without final summaries
-                my $filtered = _remove_summary_lines($output);
-                print $filtered . "\n" if $filtered;
+                print $filtered_output . "\n" if $filtered_output;
             } else {
                 # Non-verbose mode: show only file headers (first line of each test)
-                for my $line (@lines) {
+                my @filtered_lines = split /\n/, $filtered_output;
+                for my $line (@filtered_lines) {
                     # Print lines that look like file headers (e.g., "✓ t/test.t [1.23ms]")
-                    if ($line =~ /^[✓✘] /) {
+                    # Use clean version for matching but print original
+                    my $clean_line = $line;
+                    $clean_line =~ s/\x1b\[[0-9;]*m//g;  # Remove ANSI codes
+                    if ($clean_line =~ /^[✓✘] /) {
                         print $line . "\n";
                     }
                 }
             }
 
-            # Get test results from harness
-            my $aggregator = $harness->aggregator;
+            # Determine failed files from output (use clean output)
+            # Look for "✘" markers or "FAIL" in file headers
             my @failed_files = ();
-            if ($aggregator) {
-                # Collect failed test files
-                for my $parser ($aggregator->parsers) {
-                    if ($parser->has_problems) {
-                        push @failed_files, $parser->name;
-                    }
+            my @clean_lines = split /\n/, $clean_output;
+            for my $line (@clean_lines) {
+                # File header lines look like: "✘ t/test.t [1.23ms]" or "✓ t/test.t [1.23ms]"
+                if ($line =~ /^✘\s+(.+?)\s+\[[\d.]+m?s\]/) {
+                    push @failed_files, $1;
+                }
+                # Also check for lines with "FAIL" and file paths
+                elsif ($line =~ /FAIL\s+(.+\.t)/) {
+                    push @failed_files, $1 unless grep { $_ eq $1 } @failed_files;
                 }
             }
 
