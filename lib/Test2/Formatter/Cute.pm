@@ -19,6 +19,9 @@ use Test2::Util::HashBase qw(
 
 use parent 'Test2::Formatter';
 
+# Maximum length for comparison values before truncation
+use constant MAX_COMPARISON_VALUE_LENGTH => 100;
+
 sub OUT_STD() { 0 }
 sub OUT_ERR() { 1 }
 
@@ -470,11 +473,42 @@ sub _render_failure_header {
 #     "\n"
 #     "  Expected: foo\n"
 #     "  Received: bar\n"
+# Format a value for display in failure comparison
+# Handles undef, long strings, and control characters
+# Input: value (string or undef)
+# Output: formatted string
+sub _format_comparison_value {
+    my ($self, $value) = @_;
+
+    # Handle undef
+    return '<UNDEF>' unless defined $value;
+
+    # Make a copy to avoid modifying the original
+    my $formatted = $value;
+
+    # Escape control characters (more efficient with a hash lookup)
+    my %escapes = ("\n" => '\n', "\r" => '\r', "\t" => '\t');
+    $formatted =~ s/([\n\r\t])/$escapes{$1}/ge;
+
+    # Truncate long strings
+    # Use character length (not byte length) for UTF-8 strings
+    my $max_len = MAX_COMPARISON_VALUE_LENGTH;
+    if (length($formatted) > $max_len) {
+        $formatted = substr($formatted, 0, $max_len - 3) . '...';
+    }
+
+    return $formatted;
+}
+
 sub _render_failure_comparison {
     my ($self, %args) = @_;
-    my $received = $args{received} // '';
+    my $received = $args{received};
     my $op = $args{op} // '';
-    my $expected = $args{expected} // '';
+    my $expected = $args{expected};
+
+    # Format values for display
+    my $formatted_received = $self->_format_comparison_value($received);
+    my $formatted_expected = $self->_format_comparison_value($expected);
 
     my $output = "\n";
 
@@ -488,11 +522,11 @@ sub _render_failure_comparison {
 
     # Second line: "Expected: {value}"
     my $expected_label_only = $self->{+COLOR} ? $self->_colorize('Expected:', 'green') : 'Expected:';
-    $output .= "  $expected_label_only $expected\n";
+    $output .= "  $expected_label_only $formatted_expected\n";
 
     # Third line: "Received: {value}"
     my $received_label_only = $self->{+COLOR} ? $self->_colorize('Received:', 'red') : 'Received:';
-    $output .= "  $received_label_only $received\n";
+    $output .= "  $received_label_only $formatted_received\n";
 
     return $output;
 }
