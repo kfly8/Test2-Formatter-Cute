@@ -10,6 +10,9 @@ sub load {
     # Set T2_FORMATTER environment variable for test execution
     $ENV{T2_FORMATTER} = 'Cute';
 
+    # Set HARNESS_SUBCLASS to use our custom harness
+    $ENV{HARNESS_SUBCLASS} = 'TAP::Harness::Cute';
+
     # Check if color is disabled via --nocolor option
     # App::Prove stores color setting in the 'color' attribute
     unless (defined $ENV{T2_FORMATTER_CUTE_COLOR}) {
@@ -23,107 +26,7 @@ sub load {
         }
     }
 
-    # Monkey patch App::Prove::_runtests to use TAP::Harness::Cute
-    # which supports Test2::Formatter::Cute's non-TAP output
-    {
-        no warnings 'redefine';
-        my $original_runtests = \&App::Prove::_runtests;
-
-        *App::Prove::_runtests = sub {
-            my ( $self, $args, @tests ) = @_;
-
-            # Load our custom harness
-            require TAP::Harness::Cute;
-
-            # Create harness with App::Prove's settings
-            my $harness = TAP::Harness::Cute->new({
-                verbosity => $args->{verbosity} || 0,
-                jobs => $args->{jobs} || 1,
-                lib => $args->{lib} || [],
-                switches => $args->{switches} || [],
-                color => $ENV{T2_FORMATTER_CUTE_COLOR} // 1,
-            });
-
-            # Run tests through our custom harness
-            my $stats = $harness->runtests(@tests);
-
-            # Print final summary in Cute format
-            _print_final_summary(
-                files => $stats->{files},
-                tests => $stats->{tests},
-                pass => $stats->{pass},
-                fail => $stats->{fail},
-                todo => $stats->{todo},
-                duration => $stats->{duration},
-                failed_files => $stats->{failed_files},
-                verbose => ($args->{verbosity} || 0) > 0,
-                seed => $stats->{seed},
-            );
-
-            return scalar(@{$stats->{failed_files}}) == 0;
-        };
-    }
-
     return 1;
-}
-
-sub _print_final_summary {
-    my %args = @_;
-
-    my $files = $args{files};
-    my $tests = $args{tests};
-    my $pass = $args{pass};
-    my $fail = $args{fail};
-    my $todo = $args{todo};
-    my $duration = $args{duration};
-    my $failed_files = $args{failed_files} || [];
-    my $verbose = $args{verbose} || 0;
-    my $seed = $args{seed};
-
-    # Check if color is disabled
-    my $use_color = 1;
-    if (defined $ENV{T2_FORMATTER_CUTE_COLOR}) {
-        $use_color = $ENV{T2_FORMATTER_CUTE_COLOR} ? 1 : 0;
-    }
-
-    # Color codes
-    my $GREEN = $use_color ? "\e[32m" : '';
-    my $RED = $use_color ? "\e[31m" : '';
-    my $GREEN_BG = $use_color ? "\e[42m\e[1m\e[38;5;16m" : '';
-    my $RED_BG = $use_color ? "\e[41m\e[1m\e[38;5;16m" : '';
-    my $RESET = $use_color ? "\e[0m" : '';
-
-    # Determine if all tests passed
-    my $all_passed = scalar(@$failed_files) == 0;
-
-    if ($all_passed) {
-        # Success case
-        print $GREEN_BG . " PASS " . $RESET . " " . $GREEN . "All tests successful." . $RESET . "\n";
-        # Build summary line
-        my @parts = ("Files=$files", "Tests=$tests");
-        push @parts, "Todo=$todo" if $todo > 0;
-        push @parts, sprintf("Duration=%.2fms", $duration);
-        push @parts, "Seed=$seed" if defined $seed;
-        print join(", ", @parts) . "\n";
-    } else {
-        # Failure case
-        print $RED_BG . " FAIL " . $RESET . " " . $RED . "Tests failed." . $RESET . "\n";
-        # Build summary line
-        my @parts = ("Files=$files", "Tests=$tests");
-        push @parts, "Pass=$pass" if $pass > 0;
-        push @parts, "Fail=$fail" if $fail > 0;
-        push @parts, "Todo=$todo" if $todo > 0;
-        push @parts, sprintf("Duration=%.2fms", $duration);
-        push @parts, "Seed=$seed" if defined $seed;
-        print join(", ", @parts) . "\n";
-        # Print failed files list (only in verbose mode)
-        if ($verbose && @$failed_files) {
-            print "Failed files:\n";
-            for my $file (@$failed_files) {
-                print "  " . $RED . $file . $RESET . "\n";
-            }
-        }
-    }
 }
 
 1;
@@ -143,11 +46,17 @@ App::Prove::Plugin::Cute - Makes your test output cute and easy
 =head1 DESCRIPTION
 
 App::Prove::Plugin::Cute makes your Perl test output visually clearer and easier
-by configuring L<Test2::Formatter::Cute> as the test formatter.
+by configuring L<Test2::Formatter::Cute> as the test formatter and
+L<TAP::Harness::Cute> as the test harness.
 
-This plugin delegates test execution to TAP::Harness (via C<make_harness>),
-which supports features like parallel test execution (C<-j> option). The plugin
-preserves the Cute formatter output while providing an aggregated summary.
+This plugin is designed for making a small number of tests more readable and
+visually appealing. It sets the C<HARNESS_SUBCLASS> environment variable to
+C<TAP::Harness::Cute>, which runs tests sequentially and formats output using
+Test2::Formatter::Cute.
+
+B<Note:> This plugin does not support parallel test execution (C<-j> option).
+For large test suites that require parallel execution, use the standard test
+harness without this plugin.
 
 The following is an example output:
 
@@ -176,7 +85,55 @@ The following is an example output:
   Failed files:
     t/examples/failed.pl
 
+=head1 OPTIONS
+
+This plugin respects the following prove options:
+
+=over 4
+
+=item --color / --nocolor
+
+Controls whether to use color in the output. When C<--nocolor> is specified,
+the plugin sets C<T2_FORMATTER_CUTE_COLOR=0> to disable colors.
+
+=item -v / --verbose
+
+Controls verbosity. In verbose mode, full test output is displayed. In
+non-verbose mode, only file headers are shown.
+
+=back
+
+B<Unsupported options:>
+
+=over 4
+
+=item -j / --jobs
+
+Parallel test execution is not supported. Tests are always run sequentially
+to ensure proper output formatting and readability.
+
+=back
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item T2_FORMATTER
+
+Set to C<Cute> by this plugin to enable Test2::Formatter::Cute.
+
+=item HARNESS_SUBCLASS
+
+Set to C<TAP::Harness::Cute> by this plugin to use the custom harness.
+
+=item T2_FORMATTER_CUTE_COLOR
+
+Controls color output (0 = disabled, 1 = enabled). Set automatically based on
+the C<--color>/C<--nocolor> options unless already defined.
+
+=back
+
 =head1 SEE ALSO
 
-L<Test2::Formatter::Cute>
+L<Test2::Formatter::Cute>, L<TAP::Harness::Cute>, L<App::Prove>
 

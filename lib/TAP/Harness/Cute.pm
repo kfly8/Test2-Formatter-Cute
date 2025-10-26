@@ -1,6 +1,7 @@
 package TAP::Harness::Cute;
 use strict;
 use warnings;
+use base 'TAP::Harness';
 
 our $VERSION = '0.01';
 
@@ -13,7 +14,6 @@ TAP::Harness::Cute - Harness for Test2::Formatter::Cute
     use TAP::Harness::Cute;
     my $harness = TAP::Harness::Cute->new({
         verbosity => 1,
-        jobs => 4,  # parallel execution
         lib => ['lib'],
         switches => ['-w'],
     });
@@ -22,11 +22,16 @@ TAP::Harness::Cute - Harness for Test2::Formatter::Cute
 =head1 DESCRIPTION
 
 TAP::Harness::Cute is a test harness that supports Test2::Formatter::Cute's
-non-TAP output format while providing parallel test execution and other
-features expected from a test harness.
+non-TAP output format. This harness is designed for making a small number of
+tests more readable and visually appealing.
 
 Unlike TAP::Harness which expects TAP format, this harness works with
 Test2::Formatter::Cute's custom output format.
+
+B<Note:> This harness does not support parallel test execution (C<-j> option).
+It runs tests sequentially to ensure proper output formatting and readability.
+For large test suites that require parallel execution, use the standard
+TAP::Harness instead.
 
 =cut
 
@@ -34,14 +39,8 @@ sub new {
     my ($class, $args) = @_;
     $args ||= {};
 
-    my $self = bless {
-        verbosity => $args->{verbosity} || 0,
-        jobs => $args->{jobs} || 1,
-        lib => $args->{lib} || [],
-        switches => $args->{switches} || [],
-        color => $args->{color} // 1,
-        test_args => $args->{test_args} || [],
-    }, $class;
+    # Call parent constructor
+    my $self = $class->SUPER::new($args);
 
     return $self;
 }
@@ -51,32 +50,20 @@ sub runtests {
 
     return unless @tests;
 
-    my $jobs = $self->{jobs};
-    my $verbose = $self->{verbosity} > 0;
+    my $verbose = ($self->{verbosity} || 0) > 0;
 
-    # Build command line options
-    my @lib_args = map { ("-I", $_) } @{ $self->{lib} };
-    my @switches = @{ $self->{switches} };
-
-    # Track statistics
-    my %stats = (
-        files => scalar(@tests),
-        tests => 0,
-        pass => 0,
-        fail => 0,
-        todo => 0,
-        duration => 0,
-        seed => undef,
-        failed_files => [],
-    );
-
-    if ($jobs > 1) {
-        # Parallel execution
-        %stats = $self->_run_parallel(\@tests, \@lib_args, \@switches, $verbose);
-    } else {
-        # Sequential execution
-        %stats = $self->_run_sequential(\@tests, \@lib_args, \@switches, $verbose);
+    # Build command line options from TAP::Harness settings
+    my @lib_args = ();
+    if ($self->{lib}) {
+        @lib_args = map { ("-I", $_) } @{ $self->{lib} };
     }
+    my @switches = $self->{switches} ? @{ $self->{switches} } : ();
+
+    # Run tests sequentially
+    my %stats = $self->_run_sequential(\@tests, \@lib_args, \@switches, $verbose);
+
+    # Print final summary
+    $self->_print_final_summary(\%stats, $verbose);
 
     return \%stats;
 }
@@ -113,14 +100,6 @@ sub _run_sequential {
     }
 
     return %stats;
-}
-
-sub _run_parallel {
-    my ($self, $tests, $lib_args, $switches, $verbose) = @_;
-
-    # For now, fall back to sequential
-    # TODO: Implement parallel execution using fork or Parallel::ForkManager
-    return $self->_run_sequential($tests, $lib_args, $switches, $verbose);
 }
 
 sub _run_single_test {
@@ -236,6 +215,64 @@ sub _remove_summary_lines {
     return join("\n", @filtered);
 }
 
+sub _print_final_summary {
+    my ($self, $stats, $verbose) = @_;
+
+    my $files = $stats->{files};
+    my $tests = $stats->{tests};
+    my $pass = $stats->{pass};
+    my $fail = $stats->{fail};
+    my $todo = $stats->{todo};
+    my $duration = $stats->{duration};
+    my $failed_files = $stats->{failed_files} || [];
+    my $seed = $stats->{seed};
+
+    # Check if color is disabled
+    my $use_color = 1;
+    if (defined $ENV{T2_FORMATTER_CUTE_COLOR}) {
+        $use_color = $ENV{T2_FORMATTER_CUTE_COLOR} ? 1 : 0;
+    }
+
+    # Color codes
+    my $GREEN = $use_color ? "\e[32m" : '';
+    my $RED = $use_color ? "\e[31m" : '';
+    my $GREEN_BG = $use_color ? "\e[42m\e[1m\e[38;5;16m" : '';
+    my $RED_BG = $use_color ? "\e[41m\e[1m\e[38;5;16m" : '';
+    my $RESET = $use_color ? "\e[0m" : '';
+
+    # Determine if all tests passed
+    my $all_passed = scalar(@$failed_files) == 0;
+
+    if ($all_passed) {
+        # Success case
+        print $GREEN_BG . " PASS " . $RESET . " " . $GREEN . "All tests successful." . $RESET . "\n";
+        # Build summary line
+        my @parts = ("Files=$files", "Tests=$tests");
+        push @parts, "Todo=$todo" if $todo > 0;
+        push @parts, sprintf("Duration=%.2fms", $duration);
+        push @parts, "Seed=$seed" if defined $seed;
+        print join(", ", @parts) . "\n";
+    } else {
+        # Failure case
+        print $RED_BG . " FAIL " . $RESET . " " . $RED . "Tests failed." . $RESET . "\n";
+        # Build summary line
+        my @parts = ("Files=$files", "Tests=$tests");
+        push @parts, "Pass=$pass" if $pass > 0;
+        push @parts, "Fail=$fail" if $fail > 0;
+        push @parts, "Todo=$todo" if $todo > 0;
+        push @parts, sprintf("Duration=%.2fms", $duration);
+        push @parts, "Seed=$seed" if defined $seed;
+        print join(", ", @parts) . "\n";
+        # Print failed files list (only in verbose mode)
+        if ($verbose && @$failed_files) {
+            print "Failed files:\n";
+            for my $file (@$failed_files) {
+                print "  " . $RED . $file . $RESET . "\n";
+            }
+        }
+    }
+}
+
 1;
 
 __END__
@@ -252,15 +289,16 @@ Creates a new harness. Accepts the following options:
 
 =item * verbosity - Verbosity level (0 = quiet, 1+ = verbose)
 
-=item * jobs - Number of parallel jobs (default: 1)
+=item * lib - Array ref of library paths to include
 
-=item * lib - Array ref of library paths
-
-=item * switches - Array ref of Perl switches
+=item * switches - Array ref of Perl switches (e.g., C<['-w']>)
 
 =item * color - Enable/disable color output (default: 1)
 
 =back
+
+B<Note:> Unlike TAP::Harness, this harness does not support the C<jobs>
+parameter for parallel test execution.
 
 =head2 runtests
 
