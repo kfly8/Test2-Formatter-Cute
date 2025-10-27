@@ -65,8 +65,45 @@ sub runtests {
     # Print final summary
     $self->_print_final_summary(\%stats, $verbose);
 
-    return \%stats;
+    # Return a mock aggregator for App::Prove compatibility
+    return bless {
+        _stats => \%stats,
+        failed => scalar(@{$stats{failed_files}}),
+        todo => $stats{todo},
+        total => $stats{tests},
+        passed => $stats{pass},
+    }, 'TAP::Harness::Cute::Aggregator';
 }
+
+# Mock aggregator class for App::Prove compatibility
+package TAP::Harness::Cute::Aggregator;
+
+sub has_errors {
+    my $self = shift;
+    return $self->{failed} > 0;
+}
+
+sub failed {
+    my $self = shift;
+    return $self->{failed};
+}
+
+sub todo {
+    my $self = shift;
+    return $self->{todo};
+}
+
+sub total {
+    my $self = shift;
+    return $self->{total};
+}
+
+sub passed {
+    my $self = shift;
+    return $self->{passed};
+}
+
+package TAP::Harness::Cute;
 
 sub _run_sequential {
     my ($self, $tests, $lib_args, $switches, $verbose) = @_;
