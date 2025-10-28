@@ -39,8 +39,24 @@ sub new {
     my ($class, $args) = @_;
     $args ||= {};
 
+    # Convert 'verbose' to 'verbosity' if needed (App::Prove uses 'verbose')
+    if (exists $args->{verbose} && !exists $args->{verbosity}) {
+        $args->{verbosity} = $args->{verbose} ? 1 : -1;
+    }
+
+    # If verbosity is still not set, check environment variable
+    # (App::Prove may not pass verbosity to HARNESS_SUBCLASS)
+    if (!exists $args->{verbosity} && defined $ENV{T2_FORMATTER_CUTE_VERBOSE}) {
+        $args->{verbosity} = $ENV{T2_FORMATTER_CUTE_VERBOSE} ? 1 : -1;
+    }
+
     # Call parent constructor
     my $self = $class->SUPER::new($args);
+
+    # If verbosity is still not set after parent constructor, set it from environment
+    if (!defined $self->{verbosity} && defined $ENV{T2_FORMATTER_CUTE_VERBOSE}) {
+        $self->{verbosity} = $ENV{T2_FORMATTER_CUTE_VERBOSE} ? 1 : -1;
+    }
 
     return $self;
 }
@@ -62,8 +78,10 @@ sub runtests {
     # Run tests sequentially
     my %stats = $self->_run_sequential(\@tests, \@lib_args, \@switches, $verbose);
 
-    # Print final summary
-    $self->_print_final_summary(\%stats, $verbose);
+    # Print final summary (only in non-verbose mode, formatter prints its own summary in verbose mode)
+    unless ($verbose) {
+        $self->_print_final_summary(\%stats, $verbose);
+    }
 
     # Return a mock aggregator for App::Prove compatibility
     return bless {
@@ -144,23 +162,36 @@ sub _run_single_test {
 
     my @cmd = ($^X, @$switches, @$lib_args, $test);
 
-    # Run test and capture output
-    open my $fh, '-|', @cmd or die "Cannot run test $test: $!";
-
     my $output = '';
-    while (my $line = <$fh>) {
-        $output .= $line;
-    }
-    close $fh;
-    my $exit_code = $?;
+    my $exit_code;
 
-    # Display output
     if ($verbose) {
-        # Verbose mode: show full output without summary lines
-        my $filtered = $self->_remove_summary_lines($output);
-        print $filtered if $filtered;
+        # Verbose mode: capture and display output in real-time
+        open my $fh, '-|', @cmd or die "Cannot run test $test: $!";
+
+        while (my $line = <$fh>) {
+            $output .= $line;
+            print STDOUT $line;  # Display immediately to STDOUT
+        }
+        close $fh;
+        $exit_code = $?;
+
+        # Parse statistics from output
+        my $stats = $self->_parse_test_output($output);
+        $stats->{failed} = ($exit_code != 0);
+
+        return $stats;
     } else {
-        # Non-verbose mode: show only file header
+        # Non-verbose mode: capture and filter output
+        open my $fh, '-|', @cmd or die "Cannot run test $test: $!";
+
+        while (my $line = <$fh>) {
+            $output .= $line;
+        }
+        close $fh;
+        $exit_code = $?;
+
+        # Show only file header
         my @lines = split /\n/, $output;
         my $found_header = 0;
         for my $line (@lines) {
@@ -182,13 +213,13 @@ sub _run_single_test {
                 last;
             }
         }
+
+        # Parse statistics from output
+        my $stats = $self->_parse_test_output($output);
+        $stats->{failed} = ($exit_code != 0);
+
+        return $stats;
     }
-
-    # Parse statistics from output
-    my $stats = $self->_parse_test_output($output);
-    $stats->{failed} = ($exit_code != 0);
-
-    return $stats;
 }
 
 sub _parse_test_output {

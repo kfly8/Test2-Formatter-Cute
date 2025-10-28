@@ -26,6 +26,14 @@ sub load {
         }
     }
 
+    # Pass verbose setting to formatter
+    unless (defined $ENV{T2_FORMATTER_CUTE_VERBOSE}) {
+        # App::Prove stores verbose setting in the 'verbose' attribute
+        if (defined $app->verbose) {
+            $ENV{T2_FORMATTER_CUTE_VERBOSE} = $app->verbose ? 1 : 0;
+        }
+    }
+
     return 1;
 }
 

@@ -7,7 +7,7 @@ our $VERSION = '0.01';
 use Time::HiRes qw(time);
 use Test2::Util qw(clone_io);
 use Test2::Util::HashBase qw(
-    handles _encoding color
+    handles _encoding color no_numbers verbose
     _file_printed _test_file
     _pass_count _fail_count _total_count _todo_count
     _output_buffer
@@ -38,6 +38,17 @@ sub init {
             # Check if output handle is a terminal
             my $out = $self->{+HANDLES}->[OUT_STD];
             $self->{+COLOR} = (-t $out) ? 1 : 0;
+        }
+    }
+
+    # Check if verbose is enabled
+    if (!defined $self->{+VERBOSE}) {
+        # Check T2_FORMATTER_CUTE_VERBOSE environment variable
+        if (defined $ENV{T2_FORMATTER_CUTE_VERBOSE}) {
+            $self->{+VERBOSE} = $ENV{T2_FORMATTER_CUTE_VERBOSE} ? 1 : 0;
+        }
+        else {
+            $self->{+VERBOSE} = 0;  # Default to non-verbose
         }
     }
 
@@ -150,7 +161,6 @@ sub write {
         my $file = $f->{trace}{frame}[1];
         if ($file) {
             $self->{+_TEST_FILE} = $file;
-            $self->{+_FILE_PRINTED} = 1;
             # Record start time from parent if available
             if ($f->{parent} && defined $f->{parent}{start_stamp}) {
                 $self->{+_START_TIME} = $f->{parent}{start_stamp};
@@ -159,6 +169,15 @@ sub write {
                 $self->{+_START_AT} = sprintf("%04d-%02d-%02dT%02d:%02d:%02d",
                     $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
             }
+            # In verbose mode, print file header immediately (without time)
+            if ($self->{+VERBOSE}) {
+                my $io = $self->{+HANDLES}->[OUT_STD];
+                # Use a temporary header - we don't know pass/fail yet
+                my $emoji = "\x{2713}";  # Assume success initially
+                $emoji = $self->_colorize($emoji, 'green') if $self->{+COLOR};
+                print $io "$emoji $file\n";
+            }
+            $self->{+_FILE_PRINTED} = 1;
         }
     }
 
@@ -222,7 +241,7 @@ sub write {
                 );
             }
 
-            $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+            my $test_line = $self->_render_test_line(
                 pass => $pass,
                 name => $name,
                 indent_level => $indent_level,
@@ -230,6 +249,14 @@ sub write {
                 todo_reason => $todo_reason,
                 time_str => $time_str,
             );
+
+            # Output immediately in verbose mode, otherwise buffer
+            if ($self->{+VERBOSE}) {
+                my $io = $self->{+HANDLES}->[OUT_STD];
+                print $io $test_line;
+            } else {
+                $self->{+_OUTPUT_BUFFER} .= $test_line;
+            }
 
             # Push subtest name to stack for tracking path
             push @{$self->{+_SUBTEST_STACK}}, $name;
@@ -252,13 +279,21 @@ sub write {
                 $self->_record_failure($f, $name);
             }
 
-            $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+            my $test_line = $self->_render_test_line(
                 pass => $pass,
                 name => $name,
                 indent_level => $indent_level,
                 is_todo => $is_todo,
                 todo_reason => $todo_reason,
             );
+
+            # Output immediately in verbose mode, otherwise buffer
+            if ($self->{+VERBOSE}) {
+                my $io = $self->{+HANDLES}->[OUT_STD];
+                print $io $test_line;
+            } else {
+                $self->{+_OUTPUT_BUFFER} .= $test_line;
+            }
         }
     }
 
@@ -269,7 +304,14 @@ sub write {
         my $indent = '  ' x $indent_level;
         for my $error (@{$f->{errors}}) {
             my $error_emoji = $self->_colorize("\x{2718}", 'red');
-            $self->{+_OUTPUT_BUFFER} .= "$indent$error_emoji Error: $error->{details}\n";
+            my $error_line = "$indent$error_emoji Error: $error->{details}\n";
+            # Output immediately in verbose mode, otherwise buffer
+            if ($self->{+VERBOSE}) {
+                my $io = $self->{+HANDLES}->[OUT_STD];
+                print $io $error_line;
+            } else {
+                $self->{+_OUTPUT_BUFFER} .= $error_line;
+            }
         }
     }
 }
@@ -324,7 +366,7 @@ sub _write_children {
                     );
                 }
 
-                $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+                my $test_line = $self->_render_test_line(
                     pass => $pass,
                     name => $name,
                     indent_level => $indent_level,
@@ -333,6 +375,14 @@ sub _write_children {
                     time_str => $time_str,
                 );
 
+                # Output immediately in verbose mode, otherwise buffer
+                if ($self->{+VERBOSE}) {
+                    my $io = $self->{+HANDLES}->[OUT_STD];
+                    print $io $test_line;
+                } else {
+                    $self->{+_OUTPUT_BUFFER} .= $test_line;
+                }
+
                 # Push subtest name to stack
                 push @{$self->{+_SUBTEST_STACK}}, $name;
                 $self->_write_children($child->{parent}{children}, $indent_level + 1);
@@ -340,13 +390,21 @@ sub _write_children {
             }
             else {
                 # Regular test (no time display for individual assertions)
-                $self->{+_OUTPUT_BUFFER} .= $self->_render_test_line(
+                my $test_line = $self->_render_test_line(
                     pass => $pass,
                     name => $name,
                     indent_level => $indent_level,
                     is_todo => $is_todo,
                     todo_reason => $todo_reason,
                 );
+
+                # Output immediately in verbose mode, otherwise buffer
+                if ($self->{+VERBOSE}) {
+                    my $io = $self->{+HANDLES}->[OUT_STD];
+                    print $io $test_line;
+                } else {
+                    $self->{+_OUTPUT_BUFFER} .= $test_line;
+                }
 
                 # Record failure for individual test (including TODO failures)
                 if (!$pass) {
@@ -360,7 +418,14 @@ sub _write_children {
             my $indent = '  ' x $indent_level;
             for my $error (@{$child->{errors}}) {
                 my $error_emoji = $self->_colorize("\x{2718}", 'red');
-                $self->{+_OUTPUT_BUFFER} .= "$indent$error_emoji Error: $error->{details}\n";
+                my $error_line = "$indent$error_emoji Error: $error->{details}\n";
+                # Output immediately in verbose mode, otherwise buffer
+                if ($self->{+VERBOSE}) {
+                    my $io = $self->{+HANDLES}->[OUT_STD];
+                    print $io $error_line;
+                } else {
+                    $self->{+_OUTPUT_BUFFER} .= $error_line;
+                }
             }
         }
     }
@@ -674,17 +739,21 @@ sub finalize {
         };
     }
 
-    # Print file header (now we know if there were failures)
-    if ($self->{+_TEST_FILE}) {
-        print $io $self->_render_file_header(
-            file => $self->{+_TEST_FILE},
-            total_time_str => $total_time_str,
-            fail_count => $self->{+_FAIL_COUNT},
-        );
-    }
+    # In verbose mode, file header and test details were already printed
+    # In non-verbose mode, print them now
+    unless ($self->{+VERBOSE}) {
+        # Print file header (now we know if there were failures)
+        if ($self->{+_TEST_FILE}) {
+            print $io $self->_render_file_header(
+                file => $self->{+_TEST_FILE},
+                total_time_str => $total_time_str,
+                fail_count => $self->{+_FAIL_COUNT},
+            );
+        }
 
-    # Print buffered output
-    print $io $self->{+_OUTPUT_BUFFER};
+        # Print buffered output
+        print $io $self->{+_OUTPUT_BUFFER};
+    }
 
     # Print failure details
     if (@{$self->{+_FAILURES}}) {
